@@ -62,10 +62,16 @@ LIFT_BELOW_V = 150
 LIFT_TARGET_V = 225
 
 # Carriers whose solid *coloured* background should be removed rather than kept
-# as a tile. Only worth it when the background hides a mark that reads better on
-# black — JetBlue's own lockup is white type on royal blue, and the type is
-# crisper knocked out. A white background is always removed without asking.
-KNOCK_COLOURED_BG = {"JBU"}
+# as a tile. A white background is always removed without asking; a coloured one
+# usually IS brand colour worth keeping, so stripping it is opt-in.
+#
+# Empty by default, and it's worth saying why. JetBlue was in here, fed from the
+# airline's own white-on-royal-blue lockup, which knocked out to crisp white
+# type. It looked fine in isolation but threw the brand colour away: the plain
+# pipeline takes FlightAware's navy wordmark, forces it dark and lets lift_ink
+# raise it to a proper JetBlue blue, which reads better on the panel. Prefer the
+# ordinary path over a special case.
+KNOCK_COLOURED_BG = set()
 
 # Carriers with no usable square mark, where a square region of a wider logo
 # works instead. The fractions are (x0, y0, x1, y1) of that specific directory's

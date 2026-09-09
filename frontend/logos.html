@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FlightBoard logos</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Doto:wght@400..900&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#000; --panel:#050505; --line:#182028; --led:#eaf6ff; --dim:#6d8595; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--led);
+    font-family: 'Doto', monospace; font-variation-settings: 'wght' 700;
+  }
+  header {
+    position: sticky; top: 0; z-index: 2; background: var(--bg);
+    border-bottom: 1px solid var(--line); padding: 14px 20px;
+    display: flex; gap: 18px; align-items: center; flex-wrap: wrap;
+  }
+  h1 { font-size: 20px; margin: 0; letter-spacing: 3px; }
+  input, select {
+    background: var(--panel); color: var(--led); border: 1px solid var(--line);
+    border-radius: 3px; padding: 6px 10px; font: inherit; font-size: 14px;
+  }
+  #count { color: var(--dim); font-size: 12px; margin-left: auto; }
+  #grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+    gap: 12px; padding: 18px 20px 60px;
+  }
+  .tile {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
+    padding: 8px; text-align: center;
+  }
+  .tile canvas { width: 112px; height: 112px; image-rendering: pixelated; }
+  .code { font-size: 14px; margin-top: 6px; }
+  .meta { font-size: 10px; color: var(--dim); }
+  #empty { padding: 40px 20px; color: var(--dim); }
+</style>
+</head>
+<body>
+  <header>
+    <h1>LOGOS</h1>
+    <input id="q" placeholder="filter by ICAO code, e.g. JBU" autocomplete="off" size="22">
+    <select id="bg">
+      <option value="all">all backgrounds</option>
+      <option value="dark">on black</option>
+      <option value="light">light tile</option>
+    </select>
+    <span id="count"></span>
+  </header>
+  <div id="grid"></div>
+  <div id="empty" hidden>No <code>logos.js</code> found. Generate it with
+    <code>tools/make_logos.py</code> — see the README.</div>
+
+  <script src="logos.js" onerror="window.LOGOS=undefined"></script>
+  <script>
+    const grid = document.getElementById('grid');
+    const q = document.getElementById('q');
+    const bgSel = document.getElementById('bg');
+    const countEl = document.getElementById('count');
+
+    if (typeof LOGOS === 'undefined') {
+      document.getElementById('empty').hidden = false;
+      countEl.textContent = 'none loaded';
+    } else {
+      const codes = Object.keys(LOGOS).sort();
+
+      // A logo drawn on a light tile has every LED lit; one knocked out on black
+      // only lights its ink. That ratio is a good enough proxy to filter on.
+      const isLight = c => {
+        const d = LOGOS[c].d;
+        let lit = 0;
+        for (let i = 0; i < d.length; i++) if (d[i] !== '0') lit++;
+        return lit > d.length * 0.9;
+      };
+
+      function draw(canvas, code) {
+        const s = LOGO_SIZE, logo = LOGOS[code];
+        canvas.width = canvas.height = s;
+        const g = canvas.getContext('2d');
+        const img = g.createImageData(s, s);
+        for (let i = 0; i < logo.d.length; i++) {
+          const ch = logo.d.charCodeAt(i);
+          if (ch === 48) continue;                        // '0' = unlit
+          const c = logo.p[(ch <= 57 ? ch - 48 : ch - 87) - 1];
+          const o = i * 4;
+          img.data[o] = (c >> 16) & 255;
+          img.data[o + 1] = (c >> 8) & 255;
+          img.data[o + 2] = c & 255;
+          img.data[o + 3] = 255;
+        }
+        g.putImageData(img, 0, 0);
+      }
+
+      function render() {
+        const needle = q.value.trim().toUpperCase();
+        const want = bgSel.value;
+        const shown = codes.filter(c => {
+          if (needle && !c.includes(needle)) return false;
+          if (want === 'all') return true;
+          return want === 'light' ? isLight(c) : !isLight(c);
+        });
+
+        grid.innerHTML = shown.map(c =>
+          `<div class="tile"><canvas data-code="${c}"></canvas>
+             <div class="code">${c}</div>
+             <div class="meta">${isLight(c) ? 'light tile' : 'on black'}</div>
+           </div>`).join('');
+        for (const cv of grid.querySelectorAll('canvas')) draw(cv, cv.dataset.code);
+        countEl.textContent = `${shown.length} of ${codes.length} logos · ${LOGO_SIZE}×${LOGO_SIZE}`;
+      }
+
+      q.addEventListener('input', render);
+      bgSel.addEventListener('change', render);
+      render();
+    }
+  </script>
+</body>
+</html>

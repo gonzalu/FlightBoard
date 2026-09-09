@@ -183,6 +183,7 @@ route lookups fill in progressively after the first aircraft appear.
 | `/` | the LED panel (128×64) |
 | `/?model=oss` | the DIY 160×32 build's geometry |
 | `/dashboard` | multi-aircraft radar and tiles |
+| `/logos.html` | every generated airline logo, searchable |
 | `/api/aircraft` | raw JSON, useful for debugging |
 
 ### 5. Run it at boot
@@ -245,6 +246,12 @@ A few knobs at the top of `tools/make_logos.py`, all one-line entries:
 
 `frontend/logo-aliases.js` maps a callsign prefix to another carrier's logo,
 which is how regional airlines get their mainline partner's tail.
+
+**Open `/logos.html` to see what you actually got.** It renders every generated
+logo exactly as the panel draws it, filterable by ICAO code and by background
+treatment. Far easier than waiting for a carrier to fly overhead to find out
+whether its mark survived the reduction — and it's how you decide which entries
+the tables above need.
 
 > ⚠️ **Airline logos are trademarks of their airlines.** `frontend/logos.js` is
 > generated locally and is **gitignored on purpose** — please don't commit
