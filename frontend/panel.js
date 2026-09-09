@@ -152,8 +152,46 @@ function hashColors(name) {
   return [hsl(hue, 55, 28), hsl(hue, 85, 62)];
 }
 
-// Real logo if tools/make_logos.py has generated one, otherwise a tail fin.
+// A listed wordmark is only usable once every letter in it has been drawn, so
+// a half-finished face falls back to artwork rather than printing a gap.
+function wordmarkFor(key) {
+  if (typeof WORDMARKS === 'undefined' || !key) return null;
+  const text = WORDMARKS[key];
+  if (!text) return null;
+  for (const ch of text) if (!WORDMARK_FONT[ch]) return null;
+  return text;
+}
+
+// Proportional: each glyph advances by its own column count, plus one of
+// tracking. That is what fits a seven-letter name across 28 LEDs.
+function drawWordmark(box, text, color) {
+  const { x, y, size } = box;
+  let width = 0;
+  for (let i = 0; i < text.length; i++) {
+    width += WORDMARK_FONT[text[i]][0].length + (i ? 1 : 0);
+  }
+  let cx = x + ((size - width) >> 1);
+  const top = y + ((size - WORDMARK_ROWS) >> 1);
+  for (let i = 0; i < text.length; i++) {
+    const glyph = WORDMARK_FONT[text[i]];
+    if (i) cx += 1;
+    for (let r = 0; r < glyph.length; r++) {
+      const row = glyph[r];
+      for (let c = 0; c < row.length; c++) {
+        if (row[c] === '#') setPx(cx + c, top + r, color);
+      }
+    }
+    cx += glyph[0].length;
+  }
+}
+
+// A wordmark if one is listed, else the generated logo, else a tail fin.
 function drawLogo(box, key, base, accent) {
+  const words = wordmarkFor(key);
+  if (words) {
+    drawWordmark(box, words, accent);
+    return;
+  }
   const logo = typeof LOGOS !== 'undefined' && key ? LOGOS[key] : null;
   if (!logo) {
     drawFin(box, base, accent);

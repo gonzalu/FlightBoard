@@ -274,6 +274,22 @@ decision is made on the ink's HSV *value*, not its luminance.
 `frontend/logo-aliases.js` maps a callsign prefix to another carrier's logo,
 which is how regional airlines get their mainline partner's tail.
 
+Some carriers' marks are just their name, and a seven-letter wordmark reduced to
+a 28 px tile gets about four pixels a letter and runs together. No amount of
+source resolution fixes that. `frontend/wordmarks.js` draws those as type
+instead, which stays sharp and is what an LED sign would really do; jetBlue
+ships as the worked example. An entry is only the text, since the colour comes
+from `AIRLINE_COLORS` in `panel.js`, and a listed wordmark is preferred to
+generated artwork.
+
+It carries its own **narrow proportional face**, 2 to 4 columns a glyph, because
+the panel's `glcdfont` is fixed at 6 columns: "jetBlue" would want 42 columns and
+has 28. Proportionally it fits on one line with a column spare. The face holds
+only the letters the entries actually use, and a wordmark naming a letter that
+hasn't been drawn falls back to artwork rather than rendering a gap, so adding a
+carrier means adding its missing glyphs. They're written as pictures, so that is
+done by eye.
+
 **Open `/logos.html` to see what you actually got.** It renders every generated
 logo exactly as the panel draws it, filterable by ICAO code and by background
 treatment. Far easier than waiting for a carrier to fly overhead to find out
