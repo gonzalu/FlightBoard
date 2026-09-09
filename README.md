@@ -290,9 +290,9 @@ hasn't been drawn falls back to artwork rather than rendering a gap, so adding a
 carrier means adding its missing glyphs. They're written as pictures, so that is
 done by eye.
 
-**Open `/logos.html` to see what you actually got.** It renders every generated
-logo exactly as the panel draws it, filterable by ICAO code and by background
-treatment. Far easier than waiting for a carrier to fly overhead to find out
+**Open `/logos.html` to see what you actually got.** It renders every mark
+exactly as the panel draws it, wordmarks included, filterable by ICAO code and
+by background treatment. Far easier than waiting for a carrier to fly overhead to find out
 whether its mark survived the reduction — and it's how you decide which entries
 the tables above need.
 

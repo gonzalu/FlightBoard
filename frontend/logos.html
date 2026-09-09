@@ -56,6 +56,8 @@
   <div id="empty" hidden>No <code>logos.js</code> found. Generate it with
     <code>tools/make_logos.py</code> — see the README.</div>
 
+  <script src="airline-colors.js"></script>
+  <script src="wordmarks.js"></script>
   <script src="logos.js" onerror="window.LOGOS=undefined"></script>
   <script>
     const grid = document.getElementById('grid');
@@ -63,11 +65,24 @@
     const bgSel = document.getElementById('bg');
     const countEl = document.getElementById('count');
 
-    if (typeof LOGOS === 'undefined') {
+    // Carriers drawn as type rather than artwork. The panel prefers these to a
+    // generated logo, so this page has to as well or it stops showing what the
+    // panel actually draws.
+    const marks = typeof WORDMARKS === 'undefined' ? {} : WORDMARKS;
+    const isWordmark = c => {
+      if (!marks[c] || typeof WORDMARK_FONT === 'undefined') return false;
+      for (const ch of marks[c]) if (!WORDMARK_FONT[ch]) return false;
+      return true;
+    };
+    const logos = typeof LOGOS === 'undefined' ? {} : LOGOS;
+    const known = [...new Set([...Object.keys(logos),
+                               ...Object.keys(marks).filter(isWordmark)])];
+
+    if (!known.length) {
       document.getElementById('empty').hidden = false;
       countEl.textContent = 'none loaded';
     } else {
-      const codes = Object.keys(LOGOS).sort();
+      const codes = known.sort();
 
       // A light tile is the pale ground the generator composites onto, which is
       // not the same as "every LED is lit": United's blue block and Republic's
@@ -75,6 +90,7 @@
       // for the generator's LIGHT_BG among the palette rather than count pixels.
       const LIGHT_BG = [208, 208, 208];
       const isLight = c => {
+        if (isWordmark(c)) return false;          // type is always knocked out
         const { d, p } = LOGOS[c];
         const counts = new Map();
         for (let i = 0; i < d.length; i++) {
@@ -88,11 +104,48 @@
         return rgb.reduce((s, v, i) => s + Math.abs(v - LIGHT_BG[i]), 0) < 90;
       };
 
+      const SIZE = typeof LOGO_SIZE === 'undefined' ? 28 : LOGO_SIZE;
+
+      // Same geometry as drawWordmark in panel.js: each glyph advances by its
+      // own column count plus one of tracking, and the whole word is centred.
+      function drawWordmark(img, s, code) {
+        const text = marks[code];
+        const colour = (typeof AIRLINE_COLORS !== 'undefined'
+                        && AIRLINE_COLORS[code] && AIRLINE_COLORS[code][1]) || 0x8fd0ff;
+        let width = 0;
+        for (let i = 0; i < text.length; i++) {
+          width += WORDMARK_FONT[text[i]][0].length + (i ? 1 : 0);
+        }
+        let cx = (s - width) >> 1;
+        const top = (s - WORDMARK_ROWS) >> 1;
+        for (let i = 0; i < text.length; i++) {
+          const glyph = WORDMARK_FONT[text[i]];
+          if (i) cx += 1;
+          for (let r = 0; r < glyph.length; r++) {
+            for (let c = 0; c < glyph[r].length; c++) {
+              if (glyph[r][c] !== '#') continue;
+              const o = ((top + r) * s + cx + c) * 4;
+              img.data[o] = (colour >> 16) & 255;
+              img.data[o + 1] = (colour >> 8) & 255;
+              img.data[o + 2] = colour & 255;
+              img.data[o + 3] = 255;
+            }
+          }
+          cx += glyph[0].length;
+        }
+      }
+
       function draw(canvas, code) {
-        const s = LOGO_SIZE, logo = LOGOS[code];
+        const s = SIZE;
         canvas.width = canvas.height = s;
         const g = canvas.getContext('2d');
         const img = g.createImageData(s, s);
+        if (isWordmark(code)) {
+          drawWordmark(img, s, code);
+          g.putImageData(img, 0, 0);
+          return;
+        }
+        const logo = LOGOS[code];
         for (let i = 0; i < logo.d.length; i++) {
           const ch = logo.d.charCodeAt(i);
           if (ch === 48) continue;                        // '0' = unlit
@@ -118,10 +171,10 @@
         grid.innerHTML = shown.map(c =>
           `<div class="tile"><canvas data-code="${c}"></canvas>
              <div class="code">${c}</div>
-             <div class="meta">${isLight(c) ? 'light tile' : 'on black'}</div>
+             <div class="meta">${isWordmark(c) ? 'wordmark' : isLight(c) ? 'light tile' : 'on black'}</div>
            </div>`).join('');
         for (const cv of grid.querySelectorAll('canvas')) draw(cv, cv.dataset.code);
-        countEl.textContent = `${shown.length} of ${codes.length} logos · ${LOGO_SIZE}×${LOGO_SIZE}`;
+        countEl.textContent = `${shown.length} of ${codes.length} logos · ${SIZE}×${SIZE}`;
       }
 
       q.addEventListener('input', render);
