@@ -69,13 +69,23 @@
     } else {
       const codes = Object.keys(LOGOS).sort();
 
-      // A logo drawn on a light tile has every LED lit; one knocked out on black
-      // only lights its ink. That ratio is a good enough proxy to filter on.
+      // A light tile is the pale ground the generator composites onto, which is
+      // not the same as "every LED is lit": United's blue block and Republic's
+      // navy fill the square too, and that colour is the airline's own. So look
+      // for the generator's LIGHT_BG among the palette rather than count pixels.
+      const LIGHT_BG = [208, 208, 208];
       const isLight = c => {
-        const d = LOGOS[c].d;
-        let lit = 0;
-        for (let i = 0; i < d.length; i++) if (d[i] !== '0') lit++;
-        return lit > d.length * 0.9;
+        const { d, p } = LOGOS[c];
+        const counts = new Map();
+        for (let i = 0; i < d.length; i++) {
+          if (d[i] !== '0') counts.set(d[i], (counts.get(d[i]) || 0) + 1);
+        }
+        let top = null, best = 0;
+        for (const [ch, n] of counts) if (n > best) { best = n; top = ch; }
+        if (top === null || best < d.length * 0.2) return false;
+        const col = p[parseInt(top, 16) - 1];
+        const rgb = [(col >> 16) & 255, (col >> 8) & 255, col & 255];
+        return rgb.reduce((s, v, i) => s + Math.abs(v - LIGHT_BG[i]), 0) < 90;
       };
 
       function draw(canvas, code) {
