@@ -438,6 +438,7 @@ let seenThisPass = new Set();
 let page = 0;
 let lastPage = 0;
 let feedState = 'loading';   // loading | ok | nofeed | nolink
+let build = null;            // frontend fingerprint, for self-updating
 
 function current() {
   return flights.find(a => a.hex === showingHex) || null;
@@ -463,6 +464,19 @@ async function poll() {
   try {
     const res = await fetch('/api/aircraft');
     const data = await res.json();
+
+    // A cast page never reloads by itself: the Chromecast loads this URL once
+    // and renders it for months, so a deploy would otherwise never reach the
+    // TV. The backend fingerprints the frontend files; if that changes under
+    // us, pick up the new build.
+    if (data.build) {
+      if (build && data.build !== build) {
+        location.reload();
+        return;
+      }
+      build = data.build;
+    }
+
     const all = data.aircraft || [];
     flights = (CFG.SKIP_GROUND ? all.filter(a => !a.on_ground) : all)
       .slice(0, CFG.MAX_FLIGHTS);

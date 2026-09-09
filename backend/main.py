@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import logging
 import math
 import re
@@ -19,6 +20,8 @@ from . import config
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("flightboard")
+
+FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 
 _state = {"aircraft": [], "updated": 0.0, "last_error": None, "sources": []}
 
@@ -308,11 +311,35 @@ app.add_middleware(
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 
+def _build_id():
+    """Fingerprint of the frontend files, so a display can notice a redeploy.
+
+    A cast page never reloads on its own: the Chromecast loads the URL once and
+    renders it for months, so an update would otherwise never reach the TV
+    without re-casting by hand. The panel compares this against what it started
+    with and reloads itself when it changes.
+
+    Deliberately computed per request rather than at startup, because updating
+    the frontend usually doesn't involve restarting the backend at all.
+    """
+    try:
+        stamps = [
+            f"{p.name}:{p.stat().st_mtime_ns}"
+            for p in sorted(FRONTEND_DIR.glob("*"))
+            if p.is_file()
+        ]
+    except OSError:
+        return "unknown"
+    digest = hashlib.sha1("|".join(stamps).encode()).hexdigest()
+    return digest[:12]
+
+
 @app.get("/api/aircraft")
 async def get_aircraft():
     return {
         "home": {"lat": config.HOME_LAT, "lon": config.HOME_LON},
         "max_range_nm": config.MAX_RANGE_NM,
+        "build": _build_id(),
         "updated": _state["updated"],
         # seconds since the last good poll, computed server-side so the panel
         # doesn't have to trust that its clock agrees with this host's
@@ -338,5 +365,4 @@ async def dashboard():
     return RedirectResponse("/dashboard.html")
 
 
-FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
