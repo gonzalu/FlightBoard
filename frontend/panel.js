@@ -37,7 +37,7 @@ const MODELS = {
 
 const CFG = {
   PAGE_MS: 4000,      // how long each bottom-pane page holds
-  MAX_FLIGHTS: 5,     // both retail models show up to 5
+  MAX_FLIGHTS: 10,    // the retail models cap at 5; busy airspace justifies more
   SKIP_GROUND: true,  // the device supports altitude filtering; parked jets are dull
   POLL_MS: 5000,
   STALE_AFTER_S: 90,  // how long to keep showing the last good data if the feed drops
@@ -271,6 +271,30 @@ function bottomPages(ac) {
   return pages;
 }
 
+// One dot per aircraft in the rotation, in the empty band between the aircraft
+// type and the metrics. Bright = on screen now, mid = still to come this pass,
+// dim = already shown. Answers "how many is it cycling, and where am I".
+// Deliberately not top-right: line 1 runs to x~122 and would lose characters.
+// All three stay countable — knowing the fleet size is the point, so even
+// "already shown" has to survive a TV's black level.
+const DOT_CURRENT = 0x66d9ff;
+const DOT_PENDING = 0x5c8799;
+const DOT_SEEN = 0x2b4654;
+
+function drawCycleDots() {
+  if (flights.length < 2) return;
+  const shown = Math.min(flights.length, 14);
+  const pitch = 3;
+  const x0 = W - M.padX - (shown * pitch - (pitch - 1));
+  for (let i = 0; i < shown; i++) {
+    const a = flights[i];
+    const colour = a.hex === showingHex ? DOT_CURRENT
+      : seenThisPass.has(a.hex) ? DOT_SEEN
+      : DOT_PENDING;
+    setPx(x0 + i * pitch, 35, colour);
+  }
+}
+
 // Flown portion solid green, the rest a dim dotted rail — as on the real panel.
 function drawProgress(fraction) {
   const y = H - 2;
@@ -320,6 +344,7 @@ function buildFlightFrame(ac, page) {
     drawRuns(M.padX, M.bottom[i], runs.map(([t, c]) => [fitText(t, W - M.padX * 2), c]));
   });
 
+  drawCycleDots();
   if (ac.route && ac.route.progress != null) drawProgress(ac.route.progress);
 }
 
@@ -397,24 +422,57 @@ function render() {
 
 /* ---------- data + cycling ---------- */
 
+/*
+ * Rotation is tracked by aircraft identity, never by list position.
+ *
+ * The list is re-sorted by distance every poll and aircraft enter and leave it
+ * constantly, so an integer cursor into it is meaningless: when a contact
+ * overtakes another or drops out, the cursor lands somewhere arbitrary, often
+ * on a flight that was just shown. Instead, remember which hex codes this pass
+ * has already displayed and always advance to the nearest one it hasn't. A
+ * repeat within a pass then can't happen, and nothing gets skipped either.
+ */
 let flights = [];
-let idx = 0;
+let showingHex = null;       // which aircraft is on screen, by identity
+let seenThisPass = new Set();
 let page = 0;
 let lastPage = 0;
 let feedState = 'loading';   // loading | ok | nofeed | nolink
+
+function current() {
+  return flights.find(a => a.hex === showingHex) || null;
+}
+
+/** Nearest aircraft this pass hasn't shown yet; starts a new pass when spent. */
+function advance() {
+  if (!flights.length) {
+    showingHex = null;
+    return;
+  }
+  let next = flights.find(a => !seenThisPass.has(a.hex));
+  if (!next) {
+    seenThisPass.clear();
+    next = flights[0];
+  }
+  seenThisPass.add(next.hex);
+  showingHex = next.hex;
+  page = 0;
+}
 
 async function poll() {
   try {
     const res = await fetch('/api/aircraft');
     const data = await res.json();
     const all = data.aircraft || [];
-    const next = (CFG.SKIP_GROUND ? all.filter(a => !a.on_ground) : all).slice(0, CFG.MAX_FLIGHTS);
+    flights = (CFG.SKIP_GROUND ? all.filter(a => !a.on_ground) : all)
+      .slice(0, CFG.MAX_FLIGHTS);
 
-    // hold on the aircraft currently displayed, if it's still in range
-    const showing = flights[idx] && flights[idx].hex;
-    flights = next;
-    const again = next.findIndex(a => a.hex === showing);
-    idx = again >= 0 ? again : Math.min(idx, Math.max(0, next.length - 1));
+    // forget aircraft that have left, so a pass doesn't end early forever
+    const present = new Set(flights.map(a => a.hex));
+    for (const hex of [...seenThisPass]) if (!present.has(hex)) seenThisPass.delete(hex);
+
+    // if whatever was on screen has gone, move on rather than showing a blank
+    if (!current()) advance();
 
     // Ride out a brief receiver dropout on the last good data rather than
     // blanking the wall; only give up once it's genuinely stale.
@@ -432,21 +490,20 @@ function tick() {
   if (Date.now() - lastPage < CFG.PAGE_MS) return;
   lastPage = Date.now();
 
-  const pageCount = M.bottom ? bottomPages(flights[idx]).length : 1;
+  const ac = current();
+  const pageCount = ac && M.bottom ? bottomPages(ac).length : 1;
   page += 1;
-  if (page >= pageCount) {
-    page = 0;
-    if (flights.length > 1) idx = (idx + 1) % flights.length;
-  }
+  if (page >= pageCount) advance();
   paint();
 }
 
 function paint() {
+  const ac = current();
   if (feedState === 'loading') buildMessageFrame(['...']);
   else if (feedState === 'nolink') buildMessageFrame(['NO LINK', 'backend down']);
   else if (feedState === 'nofeed') buildMessageFrame(['NO FEED', 'check receiver']);
-  else if (!flights.length) buildMessageFrame(['No aircraft', 'in range']);
-  else buildFlightFrame(flights[idx], page);
+  else if (!ac) buildMessageFrame(['No aircraft', 'in range']);
+  else buildFlightFrame(ac, page);
   render();
 }
 
