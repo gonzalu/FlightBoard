@@ -170,21 +170,36 @@ function drawLogo(box, key, base, accent) {
   }
 }
 
-// Swept vertical stabilizer over a rear fuselage — reads as an aircraft tail
-// at 26px, used whenever there's no logo for the carrier.
+// A swept vertical stabilizer, drawn whenever there's no logo for the carrier.
+//
+// Proportioned off real fins: a raked leading edge that bows out towards the
+// root, a flat tip, and a vertical trailing edge. The point is that it is its
+// own silhouette, with the tile's corner left dark beneath the rake. An earlier
+// version sat the fin on a full-width bar meant to read as fuselage, which
+// filled that corner and left a striped wedge with no outline at all.
+const FIN = {
+  TIP: 0.62,          // leading edge's x at the tip, as a fraction of the box
+  HEEL: 0.06,         // ...and where it meets the root
+  CURVE: 1.3,         // 1 is a dead straight rake; above that the root sweeps out
+  BAND: [0.50, 0.72], // the accent stripe, as fractions of fin height
+  PAD_TOP: 1,
+  PAD_BOT: 2,
+};
+
 function drawFin(box, base, accent) {
   const { x, y, size } = box;
-  const bodyTop = size - 5;
-  for (let yy = 0; yy < size; yy++) {
-    if (yy >= bodyTop) {
-      for (let xx = 0; xx < size; xx++) setPx(x + xx, y + yy, base);
-      continue;
-    }
-    const lean = Math.round((bodyTop - 1 - yy) * 0.62);
-    const striped = yy > bodyTop * 0.5 && yy < bodyTop * 0.78;
-    for (let xx = lean; xx < size; xx++) {
-      setPx(x + xx, y + yy, striped ? accent : base);
-    }
+  const top = FIN.PAD_TOP;
+  const bottom = size - 1 - FIN.PAD_BOT;
+  const span = bottom - top;
+  if (span <= 0) return;
+  const tipX = Math.round(size * FIN.TIP);
+  const heelX = Math.round(size * FIN.HEEL);
+  for (let yy = top; yy <= bottom; yy++) {
+    const lead = Math.round(
+      heelX + (tipX - heelX) * Math.pow((bottom - yy) / span, FIN.CURVE));
+    const f = (yy - top) / span;
+    const color = f > FIN.BAND[0] && f < FIN.BAND[1] ? accent : base;
+    for (let xx = lead; xx < size; xx++) setPx(x + xx, y + yy, color);
   }
 }
 
