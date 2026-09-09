@@ -108,6 +108,16 @@ does FlightBoard.
 - A machine that stays on, running Linux, with Python **3.9+**. A Raspberry Pi 3
   or better is plenty — including the same Pi that's already running your
   receiver.
+- **About 150 MB of free disk.** The install is ~50 MB of Python packages, and
+  you want headroom. Check with `df -h /` before you start — a Pi that's been
+  feeding for months is often fuller than you'd think. If you're short, the
+  usual culprits are logs:
+  ```bash
+  sudo journalctl --vacuum-size=50M     # systemd journal
+  sudo du -xh --max-depth=1 /var/log | sort -rh | head
+  ```
+  Feeder daemons can be spectacularly chatty — on the Pi this was tested on,
+  `fr24feed` had quietly written 1.6 GB of logs with no rotation.
 - A display: a Chromecast, a Pi wired to a TV, or just a browser tab.
 - Internet access is **optional**. Without it you lose airline names, routes and
   aircraft types. Altitude, speed, track, position and distance all still work.

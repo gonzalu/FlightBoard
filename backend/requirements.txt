@@ -1,3 +1,7 @@
 fastapi>=0.111
-uvicorn[standard]>=0.29
+# Plain uvicorn, deliberately not uvicorn[standard]. The extras pull uvloop,
+# httptools, websockets, watchfiles and pyyaml, none of which this project uses.
+# uvloop has no armv7l wheel and compiles from source, which on a Raspberry Pi 3
+# is a long wait for nothing.
+uvicorn>=0.29
 httpx>=0.27
