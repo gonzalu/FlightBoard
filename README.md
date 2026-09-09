@@ -368,11 +368,17 @@ are.
 
 ## Troubleshooting
 
+**The board says "NO LOCATION"**
+`FLIGHTBOARD_HOME_LAT` / `_LON` aren't set, so home is `0.0, 0.0` in the
+Atlantic and nothing is ever nearby. The backend says the same thing on startup,
+along with the receivers it will poll. Note that a receiver reports `ok` here
+regardless — it is being read perfectly well, its aircraft are just all being
+filtered out by distance.
+
 **The board says "No aircraft in range"**
-Almost always the coordinates. Check `FLIGHTBOARD_HOME_LAT` / `_LON` are set and
-aren't still `0.0` — that's a spot in the Atlantic, so nothing will ever be
-nearby. Then check `curl http://YOUR-SERVER:8090/api/aircraft`, and try widening
-`FLIGHTBOARD_MAX_RANGE_NM`.
+Your location is set, so this is genuine. Check
+`curl http://YOUR-SERVER:8090/api/aircraft`, confirm the coordinates are really
+yours and not transposed, and try widening `FLIGHTBOARD_MAX_RANGE_NM`.
 
 **It says "NO FEED"**
 The backend can't reach a receiver. Test the URL directly with `curl`. The API's

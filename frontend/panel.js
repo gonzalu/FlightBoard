@@ -438,6 +438,7 @@ let seenThisPass = new Set();
 let page = 0;
 let lastPage = 0;
 let feedState = 'loading';   // loading | ok | nofeed | nolink
+let homeUnset = false;       // backend has no location, so nothing is ever near
 let build = null;            // frontend fingerprint, for self-updating
 
 function current() {
@@ -476,6 +477,11 @@ async function poll() {
       }
       build = data.build;
     }
+
+    // With no location configured every aircraft sits thousands of miles from
+    // 0,0 and is filtered out. Worth calling out separately: "No aircraft in
+    // range" is true but sends you looking at a receiver that is working fine.
+    homeUnset = !!data.home && !data.home.lat && !data.home.lon;
 
     const all = data.aircraft || [];
     flights = (CFG.SKIP_GROUND ? all.filter(a => !a.on_ground) : all)
@@ -516,6 +522,7 @@ function paint() {
   if (feedState === 'loading') buildMessageFrame(['...']);
   else if (feedState === 'nolink') buildMessageFrame(['NO LINK', 'backend down']);
   else if (feedState === 'nofeed') buildMessageFrame(['NO FEED', 'check receiver']);
+  else if (homeUnset) buildMessageFrame(['NO LOCATION', 'set home lat/lon']);
   else if (!ac) buildMessageFrame(['No aircraft', 'in range']);
   else buildFlightFrame(ac, page);
   render();

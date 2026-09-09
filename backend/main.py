@@ -290,8 +290,23 @@ async def _poll_loop():
             await asyncio.sleep(config.POLL_INTERVAL)
 
 
+def _log_config():
+    """Report the two settings an empty board is almost always down to."""
+    log.info("home %.4f,%.4f, showing aircraft within %g nm",
+             config.HOME_LAT, config.HOME_LON, config.MAX_RANGE_NM)
+    for url in config.RECEIVERS:
+        log.info("receiver %s -> %s", _receiver_name(url), url)
+    if (config.HOME_LAT, config.HOME_LON) == (0.0, 0.0):
+        log.warning(
+            "FLIGHTBOARD_HOME_LAT and FLIGHTBOARD_HOME_LON are not set, so home is "
+            "0,0 in the Atlantic. Every aircraft will measure further than %g nm "
+            "away and the board will stay empty however healthy the receiver is. "
+            "See 'Point it at your receiver' in the README.", config.MAX_RANGE_NM)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _log_config()
     tasks = [asyncio.create_task(_poll_loop())]
     if config.ENABLE_ENRICH:
         tasks.append(asyncio.create_task(_enrich_worker()))
