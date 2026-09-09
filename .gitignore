@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+
+# Generated locally by tools/make_logos.py from airline logo artwork.
+# Trademarked images - keep them out of a public repo.
+frontend/logos.js
+
+# Hand-picked logo artwork (e.g. an airline's own dark-background lockup).
+# Same trademark reasoning as logos.js - keep the images out of the repo.
+logo-sources/

@@ -1,0 +1,269 @@
+#!/usr/bin/env python3
+"""
+Turn a directory of airline logo images into pixel art for the LED panel.
+
+Input:  <src>/<ICAO>.png  (e.g. DAL.png, AAL.png) — any size, any aspect
+Output: frontend/logos.js — a palette-indexed bitmap per airline
+
+The panel keys logos off the ICAO prefix of the callsign (DAL2106 -> DAL), so
+name the files accordingly. Anything without a logo falls back to the generated
+tail fin, so a partial set is fine.
+
+    python tools/make_logos.py <src-dir> [more-dirs...] [--size 26] [--out ...]
+
+Give several directories in priority order and a later one is used whenever an
+earlier one's art doesn't survive the reduction — Republic's FlightAware logo is
+a thin script wordmark, but radarbox has it as a navy square with a starred "R".
+
+Note on licensing: airline logos are trademarked. Generating these for your own
+display is one thing; committing the output to a public repo is another. The
+default output path is gitignored for that reason.
+"""
+
+import argparse
+import json
+import os
+import sys
+
+from PIL import Image, ImageEnhance
+
+PALETTE_CHARS = "0123456789abcdef"   # index 0 means "LED off"
+MAX_COLORS = len(PALETTE_CHARS) - 1
+
+# Logos are drawn for one of two backgrounds and it isn't always the same one.
+# Dark ink (JetBlue's navy wordmark, Spirit's grey) disappears against an unlit
+# panel, so those get composited onto a light tile with every LED lit. Light ink
+# (Mesa's white "MESA") only works the other way round, knocked out on black.
+# Deciding per logo from its own ink is what makes wordmark-style marks legible.
+LIGHT_INK_THRESHOLD = 115      # mean ink luminance below this wants a light tile
+LIGHT_BG = (208, 208, 208)     # not pure white; a full 26x26 of white LEDs glares
+
+# A mark reduced to a handful of stray dots reads as noise, and the generated
+# tail fin the panel falls back to looks better. Measured on the ink, so it
+# applies to both treatments.
+MIN_INK_COVERAGE = 0.08
+
+# Carriers whose automatic background choice we override. Some marks simply
+# look better knocked out on an unlit panel even though their ink is dark.
+BACKGROUND = {
+    "DAL": "dark",     # Delta's widget reads beautifully on black
+    "AAL": "dark",     # so does American's tail
+    "EDV": "dark",     # the swoosh crop below is red on nothing
+    "ACA": "dark",     # the maple leaf rondelle is a native dark-background mark
+    "JZA": "dark",     # Jazz flies as Air Canada Express and uses the same leaf
+    "JBU": "dark",     # their own dark lockup, white type once the blue is knocked out
+}
+
+# Ink dimmer than this (HSV value, not luminance, so saturated reds aren't
+# touched) is lifted when it has to sit on an unlit panel. This is the same
+# thing airlines do when they publish a dark-background version of a mark:
+# jetBlue's navy wordmark becomes a light blue.
+LIFT_BELOW_V = 150
+LIFT_TARGET_V = 225
+
+# Carriers whose solid *coloured* background should be removed rather than kept
+# as a tile. Only worth it when the background hides a mark that reads better on
+# black — JetBlue's own lockup is white type on royal blue, and the type is
+# crisper knocked out. A white background is always removed without asking.
+KNOCK_COLOURED_BG = {"JBU"}
+
+# Carriers with no usable square mark, where a square region of a wider logo
+# works instead. The fractions are (x0, y0, x1, y1) of that specific directory's
+# artwork, squared about their centre, so the directory is named alongside them.
+CROPS = {
+    # Endeavor's own logo is a thin script wordmark; the thick right-hand tip of
+    # its twin swooshes survives the reduction where the whole mark doesn't.
+    "EDV": ("radarbox_banners", (0.72, 0.02, 1.00, 0.55)),
+}
+
+
+def load_rgba(path, code=None):
+    img = Image.open(path).convert("RGBA")
+    if img.split()[-1].getextrema()[0] != 255:
+        return img                      # already carries real transparency
+
+    # Fully opaque, so the artwork includes its own background. A white one
+    # carries no information and always goes. A coloured one usually IS brand
+    # colour worth keeping (Republic's navy tile, United's blue), so removing it
+    # is opt-in per carrier.
+    px = img.load()
+    w, h = img.size
+    corners = [px[1, 1], px[w - 2, 1], px[1, h - 2], px[w - 2, h - 2]]
+    bg = corners[0][:3]
+    dist = lambda c: sum(abs(c[i] - bg[i]) for i in range(3))
+    if any(dist(c) > 30 for c in corners):
+        return img                      # no uniform background to remove
+
+    if min(bg) < 235 and code not in KNOCK_COLOURED_BG:
+        return img                      # keep the coloured tile
+
+    for y in range(h):
+        for x in range(w):
+            r, g, b, _ = px[x, y]
+            if dist((r, g, b)) <= 40:   # tolerance covers JPEG ringing
+                px[x, y] = (r, g, b, 0)
+    return img
+
+
+def fit_square(img, size):
+    """Trim to content, then letterbox into size x size preserving aspect."""
+    box = img.split()[-1].getbbox()
+    if box:
+        img = img.crop(box)
+    scale = min(size / img.width, size / img.height)
+    w = max(1, round(img.width * scale))
+    h = max(1, round(img.height * scale))
+    img = img.resize((w, h), Image.LANCZOS)
+    out = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    out.paste(img, ((size - w) // 2, (size - h) // 2))
+    return out
+
+
+def lift_ink(img):
+    """Brighten dark ink so it reads on black, preserving hue and saturation."""
+    alpha = img.split()[-1]
+    h, s, v = img.convert("RGB").convert("HSV").split()
+    vals = [p for p, a in zip(v.getdata(), alpha.getdata()) if a >= 128]
+    if not vals:
+        return img
+    mean_v = sum(vals) / len(vals)
+    if mean_v >= LIFT_BELOW_V:
+        return img
+    factor = LIFT_TARGET_V / mean_v
+    v = v.point(lambda p: min(255, int(p * factor)))
+    out = Image.merge("HSV", (h, s, v)).convert("RGB").convert("RGBA")
+    out.putalpha(alpha)
+    return out
+
+
+def ink_stats(img):
+    """Mean luminance of the opaque pixels, and how much of the square they cover."""
+    rgb = img.convert("RGB")
+    alpha = img.split()[-1]
+    total = lum = 0
+    for (r, g, b), a in zip(rgb.getdata(), alpha.getdata()):
+        if a >= 128:
+            total += 1
+            lum += 0.299 * r + 0.587 * g + 0.114 * b
+    if not total:
+        return 255.0, 0.0
+    return lum / total, total / (img.width * img.height)
+
+
+def encode(img, size, on_light):
+    """Palette-index the image; returns (palette_ints, index_string)."""
+    flat = Image.new("RGB", (size, size), LIGHT_BG if on_light else (0, 0, 0))
+    flat.paste(img, (0, 0), img)
+    flat = ImageEnhance.Color(flat).enhance(1.3)   # LEDs want saturated color
+
+    q = flat.quantize(colors=MAX_COLORS, method=Image.MEDIANCUT)
+    # a simple logo can quantize to fewer than MAX_COLORS, so size the palette
+    # off what we actually got rather than assuming a full one
+    raw = (q.getpalette() or [])[: MAX_COLORS * 3]
+    palette = [(raw[i * 3] << 16) | (raw[i * 3 + 1] << 8) | raw[i * 3 + 2]
+               for i in range(len(raw) // 3)]
+
+    idx = list(q.getdata())
+    alpha = list(img.split()[-1].getdata())
+    top = len(palette)
+    chars = []
+    for i, a in enumerate(alpha):
+        # on a light tile the background is part of the logo, so it stays lit
+        lit = (on_light or a >= 128) and idx[i] < top
+        chars.append(PALETTE_CHARS[idx[i] + 1] if lit else PALETTE_CHARS[0])
+    return palette, "".join(chars)
+
+
+def square_crop(img, frac):
+    """A square region about the centre of a fractional box."""
+    w, h = img.size
+    x0, y0, x1, y1 = frac[0] * w, frac[1] * h, frac[2] * w, frac[3] * h
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    side = max(x1 - x0, y1 - y0) / 2
+    box = (round(cx - side), round(cy - side), round(cx + side), round(cy + side))
+    out = Image.new("RGBA", (box[2] - box[0], box[3] - box[1]), (0, 0, 0, 0))
+    out.paste(img.crop(box), (0, 0))
+    return out
+
+
+def build(path, size, code):
+    """Render one source image, or raise/return None if it isn't usable."""
+    src = load_rgba(path, code)
+    crop = CROPS.get(code)
+    if crop and os.path.basename(os.path.dirname(path)) == crop[0]:
+        src = square_crop(src, crop[1])
+    img = fit_square(src, size)
+    luminance, coverage = ink_stats(img)
+    if coverage < MIN_INK_COVERAGE:
+        return None, f"too sparse ({coverage:.0%} ink)"
+    override = BACKGROUND.get(code)
+    on_light = (override == "light") if override else (luminance < LIGHT_INK_THRESHOLD)
+    if not on_light:
+        img = lift_ink(img)
+    palette, data = encode(img, size, on_light)
+    if data.count("0") == len(data):
+        return None, "empty after processing"
+    return {"p": palette, "d": data, "_light": on_light}, None
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("src", nargs="+",
+                    help="one or more directories of <ICAO>.png, in priority order; "
+                         "a later directory is tried when an earlier one's art is unusable")
+    ap.add_argument("--size", type=int, default=26, help="pixel size (default 26)")
+    ap.add_argument("--out", default="frontend/logos.js")
+    args = ap.parse_args()
+
+    # code -> candidate paths, in the order the directories were given
+    candidates = {}
+    for directory in args.src:
+        for name in sorted(os.listdir(directory)):
+            stem, ext = os.path.splitext(name)
+            if ext.lower() not in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
+                continue
+            candidates.setdefault(stem.upper(), []).append(os.path.join(directory, name))
+
+    logos, skipped, light, rescued = {}, [], 0, 0
+    for code, paths in sorted(candidates.items()):
+        reason = "no source"
+        for depth, path in enumerate(paths):
+            try:
+                logo, reason = build(path, args.size, code)
+            except Exception as e:
+                logo, reason = None, str(e)
+            if logo:
+                light += 1 if logo.pop("_light") else 0
+                rescued += 1 if depth else 0
+                logos[code] = logo
+                break
+        else:
+            skipped.append(f"{code}: {reason}")
+
+    lines = [
+        "/*",
+        " * Airline logos as LED pixel art, generated by tools/make_logos.py.",
+        f" * {args.size}x{args.size}, palette-indexed; '0' means the LED stays off.",
+        " * Trademarked artwork - generated locally, not committed.",
+        " */",
+        f"const LOGO_SIZE = {args.size};",
+        "const LOGOS = {",
+    ]
+    for code in sorted(logos):
+        lines.append(f'  {code}: {json.dumps(logos[code], separators=(",", ":"))},')
+    lines.append("};")
+
+    os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
+    with open(args.out, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+
+    size_kb = os.path.getsize(args.out) / 1024
+    print(f"wrote {args.out}: {len(logos)} logos "
+          f"({light} on a light tile, {len(logos) - light} on black, "
+          f"{rescued} from a fallback source), {size_kb:.0f} KB")
+    for s in skipped:
+        print("  skipped", s, file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()

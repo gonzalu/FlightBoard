@@ -1,0 +1,16 @@
+[Unit]
+Description=FlightBoard Chromecast watchdog (one-shot, run by timer)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+
+# ---- EDIT THESE ----------------------------------------------------------
+User=CHANGEME
+# Chromecast friendly name exactly as `catt scan` reports it, and the panel URL
+# the stick should load (must be reachable from the Chromecast, not localhost).
+Environment=FLIGHTBOARD_CAST_DEVICE=Living Room TV
+Environment=FLIGHTBOARD_URL=http://YOUR-SERVER:8090/
+ExecStart=/home/CHANGEME/flightboard/.venv/bin/python /home/CHANGEME/flightboard/tools/flightboard-cast-watchdog.py
+# --------------------------------------------------------------------------

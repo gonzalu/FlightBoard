@@ -1,0 +1,10 @@
+# This project is edited on Windows but runs on Linux: systemd units, shell
+# snippets and Python all break or misbehave with CRLF endings. Normalise to LF
+# everywhere, in the repo and in the working copy.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.mov binary
+*.mp4 binary

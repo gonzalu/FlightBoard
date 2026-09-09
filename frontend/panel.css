@@ -1,0 +1,21 @@
+html, body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+}
+
+#stage {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#panel {
+  /* the panel's own bezel — a physical LED module sitting on a black wall */
+  border-radius: 4px;
+  box-shadow: 0 0 0 6px #0a0a0a, 0 0 0 7px #1c1c1c, 0 18px 60px rgba(0, 0, 0, 0.9);
+}
