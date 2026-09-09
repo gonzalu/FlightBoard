@@ -213,6 +213,8 @@ def main():
                          "a later directory is tried when an earlier one's art is unusable")
     ap.add_argument("--size", type=int, default=26, help="pixel size (default 26)")
     ap.add_argument("--out", default="frontend/logos.js")
+    ap.add_argument("--verbose", action="store_true",
+                    help="list every rejected logo and why, rather than a count")
     args = ap.parse_args()
 
     # code -> candidate paths, in the order the directories were given
@@ -261,8 +263,17 @@ def main():
     print(f"wrote {args.out}: {len(logos)} logos "
           f"({light} on a light tile, {len(logos) - light} on black, "
           f"{rescued} from a fallback source), {size_kb:.0f} KB")
-    for s in skipped:
-        print("  skipped", s, file=sys.stderr)
+
+    # Rejections are normal and expected - obscure carriers whose artwork can't
+    # survive the reduction fall back to a generated tail fin. Listing every one
+    # makes a healthy run look like a failure, so summarise unless asked.
+    if skipped:
+        if args.verbose:
+            for s in skipped:
+                print("  skipped", s, file=sys.stderr)
+        else:
+            print(f"{len(skipped)} carriers had no usable artwork and will use a "
+                  f"tail fin instead (--verbose to list them)")
 
 
 if __name__ == "__main__":

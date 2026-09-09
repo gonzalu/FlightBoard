@@ -206,14 +206,28 @@ Out of the box, carriers are drawn as a swept tail fin in their brand colours.
 For real airline logos, generate them from artwork you supply:
 
 ```bash
-.venv/bin/pip install Pillow
+sudo apt install -y python3-pil        # Debian's prebuilt Pillow
+mkdir -p /tmp/logosrc && cd /tmp/logosrc
 curl -sL https://codeload.github.com/Jxck-S/airline-logos/tar.gz/refs/heads/main | tar -xz
-.venv/bin/python tools/make_logos.py \
-    airline-logos-main/flightaware_logos \
-    airline-logos-main/radarbox_logos \
-    airline-logos-main/radarbox_banners \
+cd ~/flightboard
+python3 tools/make_logos.py \
+    /tmp/logosrc/airline-logos-main/flightaware_logos \
+    /tmp/logosrc/airline-logos-main/radarbox_logos \
+    /tmp/logosrc/airline-logos-main/radarbox_banners \
     --size 28 --out frontend/logos.js
+rm -rf /tmp/logosrc                    # ~150 MB of source artwork, no longer needed
 ```
+
+Two deliberate details there. It uses **`python3`, not the venv** — `make_logos.py`
+imports nothing but PIL, so it has no business needing the app's environment. And
+it installs Pillow **via apt rather than pip**, because current Pillow has no
+armv7l wheel: on a Raspberry Pi, `pip install Pillow` tries to compile from source
+and fails unless you also install `libjpeg-dev` and `zlib1g-dev`. Debian's package
+is prebuilt and works immediately.
+
+Generating all ~1,650 logos takes about a minute, even on a Pi 3. Expect a line
+reporting some carriers had no usable artwork — that's normal, they fall back to
+tail fins. Add `--verbose` to see which.
 
 Reload the page and airlines appear with their own marks. Files are matched by
 **ICAO code** (`DAL.png`, `AAL.png`) because that's the prefix FlightBoard reads

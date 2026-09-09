@@ -9,3 +9,6 @@ frontend/logos.js
 # Hand-picked logo artwork (e.g. an airline's own dark-background lockup).
 # Same trademark reasoning as logos.js - keep the images out of the repo.
 logo-sources/
+
+# Logo source artwork, if extracted into the checkout rather than /tmp
+airline-logos-main/
