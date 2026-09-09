@@ -280,11 +280,26 @@ function fmtEta(min) {
   return m ? `${h}h ${m}min` : `${h}hr`;
 }
 
-function flightTitle(airline, callsign) {
+// "Delta 1620" rather than just "Delta". The number is the half you actually
+// look up, so when the two won't fit together it is the airline that gives way,
+// never the number: plain truncation dropped it entirely and left "Cathay
+// Pacific" identifying three flights at once.
+function flightTitle(airline, callsign, maxW) {
   const short = airline ? shortenAirline(airline) : '';
   if (!short) return callsign;
   const number = /^[A-Z]{3}(\w+)$/.exec(callsign);   // DAL1620 -> 1620
-  return number ? `${short} ${number[1]}` : short;
+  if (!number) return fitText(short, maxW);
+  const tail = ' ' + number[1];
+  if (textW(short + tail) <= maxW) return short + tail;
+  // shed whole trailing words first, which reads better than a chopped one:
+  // "Air Canada Jazz 538" becomes "Air Canada 538", not "Air Canada Ja 538"
+  const words = short.split(' ');
+  while (words.length > 1) {
+    words.pop();
+    const candidate = words.join(' ') + tail;
+    if (textW(candidate) <= maxW) return candidate;
+  }
+  return fitText(words[0], maxW - textW(tail)) + tail;
 }
 
 function shortenAirline(name) {
@@ -389,16 +404,14 @@ function buildFlightFrame(ac, page) {
     drawLogo(M.logo, key, base, accent);
   }
 
-  // "Delta 1620" rather than just "Delta": the flight number is the thing you
-  // actually look up, and without it the callsign appeared nowhere on the panel
-  const title = flightTitle(airline, callsign);
+  const availW = W - TEXT_X - M.padX;
+  const title = flightTitle(airline, callsign, availW);
   const route = (ac.route && ac.route.origin && ac.route.destination)
     ? `${ac.route.origin}${M.routeSep}${ac.route.destination}`
     : `${ac.distance_nm.toFixed(1)}NM`;
   // line 1 already carries the callsign, so don't repeat it here
   const detail = info.type || (info.registration !== callsign ? info.registration : '') || '';
 
-  const availW = W - TEXT_X - M.padX;
   drawText(TEXT_X, M.lines[0], fitText(title, availW), C_TEXT);
   drawText(TEXT_X, M.lines[1], fitText(route, availW), C_TEXT);
   if (detail) drawText(TEXT_X, M.lines[2], fitText(detail, availW), C_TEXT);
