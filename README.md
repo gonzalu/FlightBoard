@@ -153,20 +153,29 @@ Two things must be right or you'll get an empty board: the **receiver URL** and
 if the location is wrong, nothing is ever "nearby".
 
 ```bash
-export FLIGHTBOARD_RECEIVERS="http://YOUR-PI.local/skyaware/data/aircraft.json"
-export FLIGHTBOARD_HOME_LAT="40.8834"
-export FLIGHTBOARD_HOME_LON="-73.9103"
+cp flightboard.env.example flightboard.env
+nano flightboard.env      # set FLIGHTBOARD_HOME_LAT, _HOME_LON and _RECEIVERS
 ```
 
-Approximate coordinates are fine — three or four decimals off any map. This only
-centres the radar and sets the range filter, and it stays on your machine.
+Approximate coordinates are fine — three or four decimals off any map. They only
+centre the radar and set the range filter, and they stay on your machine:
+`flightboard.env` is gitignored because it holds your location.
+
+Set it once. That same file is read both by a manual run and by the systemd
+service in step 5, so there is never a second copy of your settings to keep in
+step. Anything already in the environment beats the file, which is what makes a
+one-off easy without editing anything:
+
+```bash
+FLIGHTBOARD_MAX_RANGE_NM=80 .venv/bin/uvicorn backend.main:app
+```
 
 **More than one receiver?** List them comma separated. They're all polled and
 merged, deduplicated by aircraft, so a second receiver both widens coverage and
 keeps the board alive when the first drops off:
 
-```bash
-export FLIGHTBOARD_RECEIVERS="http://pi-roof.local/skyaware/data/aircraft.json,http://pi-desk.local/skyaware/data/aircraft.json"
+```
+FLIGHTBOARD_RECEIVERS=http://pi-roof.local/skyaware/data/aircraft.json,http://pi-desk.local/skyaware/data/aircraft.json
 ```
 
 ### 4. Try it
@@ -196,8 +205,11 @@ sudo systemctl enable --now flightboard-backend
 systemctl status flightboard-backend
 ```
 
-The unit file has an `EDIT THESE` block covering the user, install path, your
-coordinates and your receivers.
+The unit file has an `EDIT THESE` block, and it is only the account name and
+two paths — your coordinates and receivers stay in `flightboard.env`, which the
+unit reads with `EnvironmentFile=`. Change a setting later by editing that file
+and running `sudo systemctl restart flightboard-backend`; you only need
+`daemon-reload` if you edit the unit itself.
 
 ---
 
@@ -319,7 +331,9 @@ Open the URL and press F11. Perfectly good on a spare monitor.
 
 ## Configuration reference
 
-All settings are environment variables, read at startup.
+All settings are read at startup from, in order: the environment, then
+`flightboard.env` beside the checkout, then the defaults below. Put yours in the
+file and use the environment to override one for a single run.
 
 | Variable | Default | What it does |
 |---|---|---|

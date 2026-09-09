@@ -292,6 +292,8 @@ async def _poll_loop():
 
 def _log_config():
     """Report the two settings an empty board is almost always down to."""
+    if config.CONFIG_SOURCE:
+        log.info("settings from %s", config.CONFIG_SOURCE)
     log.info("home %.4f,%.4f, showing aircraft within %g nm",
              config.HOME_LAT, config.HOME_LON, config.MAX_RANGE_NM)
     for url in config.RECEIVERS:
@@ -301,7 +303,8 @@ def _log_config():
             "FLIGHTBOARD_HOME_LAT and FLIGHTBOARD_HOME_LON are not set, so home is "
             "0,0 in the Atlantic. Every aircraft will measure further than %g nm "
             "away and the board will stay empty however healthy the receiver is. "
-            "See 'Point it at your receiver' in the README.", config.MAX_RANGE_NM)
+            "Copy flightboard.env.example to flightboard.env and set them there.",
+            config.MAX_RANGE_NM)
 
 
 @asynccontextmanager

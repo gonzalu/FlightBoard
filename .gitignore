@@ -12,3 +12,6 @@ logo-sources/
 
 # Logo source artwork, if extracted into the checkout rather than /tmp
 airline-logos-main/
+
+# Your settings, including your coordinates. Copy flightboard.env.example.
+flightboard.env

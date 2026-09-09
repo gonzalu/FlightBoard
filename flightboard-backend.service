@@ -7,17 +7,16 @@ Wants=network-online.target
 Type=simple
 
 # ---- EDIT THESE ----------------------------------------------------------
-# The account that owns the checkout, where you cloned it, and your location.
+# The account that owns the checkout, and where you cloned it. Three paths to
+# change; there is nothing else to fill in here.
 User=CHANGEME
 WorkingDirectory=/home/CHANGEME/flightboard
-Environment=FLIGHTBOARD_HOME_LAT=0.0
-Environment=FLIGHTBOARD_HOME_LON=0.0
 
-# One or more receivers, comma separated. All are polled and merged, so a
-# second receiver widens coverage and covers the first one dropping out.
-# tar1090 users: the path is usually /tar1090/data/aircraft.json
-Environment=FLIGHTBOARD_RECEIVERS=http://YOUR-PI.local/skyaware/data/aircraft.json
-Environment=FLIGHTBOARD_MAX_RANGE_NM=40
+# Your coordinates and receivers live in flightboard.env, not in this file, so
+# that a manual `uvicorn` run and this service read the same settings. Copy
+# flightboard.env.example to flightboard.env and edit that. The leading dash
+# means the service still starts if the file is missing.
+EnvironmentFile=-/home/CHANGEME/flightboard/flightboard.env
 
 ExecStart=/home/CHANGEME/flightboard/.venv/bin/uvicorn backend.main:app --host 0.0.0.0 --port 8090
 # --------------------------------------------------------------------------
