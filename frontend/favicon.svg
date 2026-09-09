@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28" role="img" aria-label="FlightBoard">
+  <!-- The tab icon is the panel itself: an aircraft lit on a matrix of LEDs.
+       7x7 dots on a 4px pitch, so it still reads as a plane at 16px. -->
+  <defs>
+    <pattern id="unlit" width="4" height="4" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="0.85" fill="#111c22"/>
+    </pattern>
+  </defs>
+  <rect width="28" height="28" rx="4" fill="#000"/>
+  <rect width="28" height="28" rx="4" fill="url(#unlit)"/>
+  <g fill="#6fdcff">
+    <circle cx="14" cy="2" r="1.55"/>
+    <circle cx="14" cy="6" r="1.55"/>
+    <circle cx="14" cy="10" r="1.55"/>
+    <circle cx="2" cy="14" r="1.55"/>
+    <circle cx="6" cy="14" r="1.55"/>
+    <circle cx="10" cy="14" r="1.55"/>
+    <circle cx="14" cy="14" r="1.55"/>
+    <circle cx="18" cy="14" r="1.55"/>
+    <circle cx="22" cy="14" r="1.55"/>
+    <circle cx="26" cy="14" r="1.55"/>
+    <circle cx="14" cy="18" r="1.55"/>
+    <circle cx="6" cy="22" r="1.55"/>
+    <circle cx="10" cy="22" r="1.55"/>
+    <circle cx="14" cy="22" r="1.55"/>
+    <circle cx="18" cy="22" r="1.55"/>
+    <circle cx="22" cy="22" r="1.55"/>
+    <circle cx="14" cy="26" r="1.55"/>
+  </g>
+</svg>

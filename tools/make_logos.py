@@ -31,28 +31,34 @@ PALETTE_CHARS = "0123456789abcdef"   # index 0 means "LED off"
 MAX_COLORS = len(PALETTE_CHARS) - 1
 
 # Logos are drawn for one of two backgrounds and it isn't always the same one.
-# Dark ink (JetBlue's navy wordmark, Spirit's grey) disappears against an unlit
-# panel, so those get composited onto a light tile with every LED lit. Light ink
-# (Mesa's white "MESA") only works the other way round, knocked out on black.
-# Deciding per logo from its own ink is what makes wordmark-style marks legible.
-LIGHT_INK_THRESHOLD = 115      # mean ink luminance below this wants a light tile
-LIGHT_BG = (208, 208, 208)     # not pure white; a full 26x26 of white LEDs glares
+# Ink an unlit panel would swallow gets composited onto a light tile with every
+# LED lit. Everything else is knocked out on black, which is what an LED sign
+# actually looks like, so that is the case to prefer.
+#
+# The measure is the ink's HSV *value*, not its luminance, and that distinction
+# is the whole game. By luminance a saturated navy or a deep red counts as dark,
+# which exiled two thirds of all carriers to a grey tile - jetBlue, FedEx, El Al
+# and UPS among them. But value is exactly what lift_ink can raise, and lifting a
+# saturated colour gives back a bright brand colour that belongs on black. Only
+# ink that is *both* dim and washed out - a plain black wordmark, a thin grey
+# line drawing - is past rescuing and genuinely needs a light tile.
+LIGHT_INK_VALUE = 115          # ink dimmer than this (HSV value) may want a light tile
+LIGHT_INK_SAT = 180            # ...but only when it is this desaturated as well
+LIGHT_BG = (208, 208, 208)     # not pure white; a full tile of white LEDs glares
 
 # A mark reduced to a handful of stray dots reads as noise, and the generated
 # tail fin the panel falls back to looks better. Measured on the ink, so it
 # applies to both treatments.
 MIN_INK_COVERAGE = 0.08
 
-# Carriers whose automatic background choice we override. Some marks simply
-# look better knocked out on an unlit panel even though their ink is dark.
-BACKGROUND = {
-    "DAL": "dark",     # Delta's widget reads beautifully on black
-    "AAL": "dark",     # so does American's tail
-    "EDV": "dark",     # the swoosh crop below is red on nothing
-    "ACA": "dark",     # the maple leaf rondelle is a native dark-background mark
-    "JZA": "dark",     # Jazz flies as Air Canada Express and uses the same leaf
-    "JBU": "dark",     # their own dark lockup, white type once the blue is knocked out
-}
+# Carriers whose automatic background choice we override, to "dark" or "light".
+#
+# Empty, and worth saying why. It used to name six airlines - Delta, American,
+# Endeavor, Air Canada, Jazz, jetBlue - that the old luminance rule pushed onto a
+# grey tile against all sense. Every one of them chooses black on its own now. A
+# table that exists only to correct a bad measure is evidence the measure is
+# wrong: fix the measure and the table empties itself.
+BACKGROUND = {}
 
 # Ink dimmer than this (HSV value, not luminance, so saturated reds aren't
 # touched) is lifted when it has to sit on an unlit panel. This is the same
@@ -143,17 +149,18 @@ def lift_ink(img):
 
 
 def ink_stats(img):
-    """Mean luminance of the opaque pixels, and how much of the square they cover."""
-    rgb = img.convert("RGB")
+    """Mean HSV value and saturation of the opaque pixels, and their coverage."""
+    _, s, v = img.convert("RGB").convert("HSV").split()
     alpha = img.split()[-1]
-    total = lum = 0
-    for (r, g, b), a in zip(rgb.getdata(), alpha.getdata()):
+    total = val = sat = 0
+    for sv, vv, a in zip(s.getdata(), v.getdata(), alpha.getdata()):
         if a >= 128:
             total += 1
-            lum += 0.299 * r + 0.587 * g + 0.114 * b
+            val += vv
+            sat += sv
     if not total:
-        return 255.0, 0.0
-    return lum / total, total / (img.width * img.height)
+        return 255.0, 0.0, 0.0
+    return val / total, sat / total, total / (img.width * img.height)
 
 
 def encode(img, size, on_light):
@@ -195,16 +202,25 @@ def square_crop(img, frac):
 def build(path, size, code):
     """Render one source image, or raise/return None if it isn't usable."""
     src = load_rgba(path, code)
+    # Art still fully opaque at this point brought its own background - Republic's
+    # navy tile, United's blue. That block is part of the mark, so neither the
+    # light tile nor the lift applies: both would repaint a colour the airline chose.
+    own_bg = src.split()[-1].getextrema()[0] == 255
     crop = CROPS.get(code)
     if crop and os.path.basename(os.path.dirname(path)) == crop[0]:
         src = square_crop(src, crop[1])
     img = fit_square(src, size)
-    luminance, coverage = ink_stats(img)
+    value, saturation, coverage = ink_stats(img)
     if coverage < MIN_INK_COVERAGE:
         return None, f"too sparse ({coverage:.0%} ink)"
     override = BACKGROUND.get(code)
-    on_light = (override == "light") if override else (luminance < LIGHT_INK_THRESHOLD)
-    if not on_light:
+    if override:
+        on_light = override == "light"
+    elif own_bg:
+        on_light = False
+    else:
+        on_light = value < LIGHT_INK_VALUE and saturation < LIGHT_INK_SAT
+    if not on_light and not own_bg:
         img = lift_ink(img)
     palette, data = encode(img, size, on_light)
     if data.count("0") == len(data):

@@ -242,7 +242,14 @@ A few knobs at the top of `tools/make_logos.py`, all one-line entries:
 | `BACKGROUND` | force a carrier onto black or onto a light tile |
 | `CROPS` | use a square region of a wider logo |
 | `KNOCK_COLOURED_BG` | strip a solid colour background |
-| `LIGHT_INK_THRESHOLD` | where the automatic light/dark decision sits |
+| `LIGHT_INK_VALUE` / `LIGHT_INK_SAT` | where the automatic light/dark decision sits |
+
+Almost every carrier ends up knocked out on black, which is what an LED sign
+looks like. A light tile — every LED lit, the mark composited on top — is the
+exception, reserved for ink that is both dim and washed out, like a plain black
+wordmark. Colour is not the same as brightness here: a saturated navy or a deep
+red looks dark but reads beautifully once its brightness is lifted, so the
+decision is made on the ink's HSV *value*, not its luminance.
 
 `frontend/logo-aliases.js` maps a callsign prefix to another carrier's logo,
 which is how regional airlines get their mainline partner's tail.
