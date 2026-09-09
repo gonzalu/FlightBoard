@@ -321,8 +321,13 @@ function airportLabel(a) {
   if (a.short && textW(a.short) <= avail) return a.short;
   if (a.city && textW(a.city) <= avail) return a.city;
   // A municipality is sometimes two towns, "Cincinnati / Covington", which
-  // overruns by a single character where the first name alone is comfortable.
-  const first = (a.city || '').split('/')[0].trim();
+  // overruns by one character. Close up the spaces around the slash before
+  // giving either of them up: CVG is Cincinnati to a passenger and Covington
+  // to anyone who knows where the code came from, and both then fit.
+  const pair = (a.city || '').replace(/\s*\/\s*/g, '/');
+  if (pair && textW(pair) <= avail) return pair;
+  // Still over, so keep the first town, which is the one usually said aloud.
+  const first = pair.split('/')[0];
   if (first && textW(first) <= avail) return first;
   // Nothing fits, so chop the city rather than the official name: "Cincinnati
   // / Covingt" still reads as a place, "Cincinnati Northern K" reads as nothing.
