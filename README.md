@@ -154,7 +154,15 @@ if the location is wrong, nothing is ever "nearby".
 
 ```bash
 cp flightboard.env.example flightboard.env
-nano flightboard.env      # set FLIGHTBOARD_HOME_LAT, _HOME_LON and _RECEIVERS
+nano flightboard.env
+```
+
+The three lines that matter, with the author's own as a worked example:
+
+```
+FLIGHTBOARD_HOME_LAT=40.8834
+FLIGHTBOARD_HOME_LON=-73.9103
+FLIGHTBOARD_RECEIVERS=http://YOUR-PI.local/skyaware/data/aircraft.json
 ```
 
 Approximate coordinates are fine — three or four decimals off any map. They only
