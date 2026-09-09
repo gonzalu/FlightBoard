@@ -172,34 +172,66 @@ function drawLogo(box, key, base, accent) {
 
 // A swept vertical stabilizer, drawn whenever there's no logo for the carrier.
 //
-// Proportioned off real fins: a raked leading edge that bows out towards the
-// root, a flat tip, and a vertical trailing edge. The point is that it is its
-// own silhouette, with the tile's corner left dark beneath the rake. An earlier
-// version sat the fin on a full-width bar meant to read as fuselage, which
-// filled that corner and left a striped wedge with no outline at all.
+// Both edges rake, and that is the whole trick. Earlier versions pinned the
+// trailing edge to the right of the tile on every row, which builds a right
+// triangle glued to the edge: it reads as a striped wedge, not a tail. A real
+// fin leans, so the trailing edge has to lean with the leading one.
+//
+// The four fractions below are measured off airline marks that already look
+// right at this size. Four of them agreed to within a couple of percent, which
+// makes this a convention worth copying rather than one artist's taste.
 const FIN = {
-  TIP: 0.62,          // leading edge's x at the tip, as a fraction of the box
-  HEEL: 0.06,         // ...and where it meets the root
-  CURVE: 1.3,         // 1 is a dead straight rake; above that the root sweeps out
-  BAND: [0.50, 0.72], // the accent stripe, as fractions of fin height
-  PAD_TOP: 1,
-  PAD_BOT: 2,
+  LEAD_TOP: 0.71,      // leading edge at the tip, as a fraction of tile width
+  LEAD_BOTTOM: 0.00,   // ...and where it meets the root
+  TRAIL_TOP: 0.96,     // trailing edge at the tip
+  TRAIL_BOTTOM: 0.79,  // ...and at the root
+  BAND: [0.50, 0.72],  // accent stripe, as fractions of fin height
 };
+
+// Both raked edges land between LEDs, and rounding them to whole LEDs is what
+// makes the staircase. An LED panel can dim an individual LED, though, so light
+// the one the edge passes through in proportion to how much of it is covered.
+//
+// It fades towards UNLIT rather than towards black. Black is not "off" here:
+// the grid canvas paints unlit LEDs at #0a0a0a, so a lit-but-black LED comes out
+// *darker* than its neighbours and punches a hole in the edge instead of
+// softening it.
+const UNLIT = 0x0a0a0a;
+const FIN_EDGE_FLOOR = 0.06;   // below this the LED isn't worth lighting at all
+
+function fadeToUnlit(color, f) {
+  let out = 0;
+  for (const shift of [16, 8, 0]) {
+    const u = (UNLIT >> shift) & 255;
+    const c = (color >> shift) & 255;
+    out |= Math.round(u + (c - u) * f) << shift;
+  }
+  return out;
+}
 
 function drawFin(box, base, accent) {
   const { x, y, size } = box;
-  const top = FIN.PAD_TOP;
-  const bottom = size - 1 - FIN.PAD_BOT;
-  const span = bottom - top;
+  const span = size - 1;
   if (span <= 0) return;
-  const tipX = Math.round(size * FIN.TIP);
-  const heelX = Math.round(size * FIN.HEEL);
-  for (let yy = top; yy <= bottom; yy++) {
-    const lead = Math.round(
-      heelX + (tipX - heelX) * Math.pow((bottom - yy) / span, FIN.CURVE));
-    const f = (yy - top) / span;
-    const color = f > FIN.BAND[0] && f < FIN.BAND[1] ? accent : base;
-    for (let xx = lead; xx < size; xx++) setPx(x + xx, y + yy, color);
+  for (let yy = 0; yy < size; yy++) {
+    const t = yy / span;
+    const lead = size * (FIN.LEAD_TOP + (FIN.LEAD_BOTTOM - FIN.LEAD_TOP) * t);
+    const trail = size * (FIN.TRAIL_TOP + (FIN.TRAIL_BOTTOM - FIN.TRAIL_TOP) * t);
+    const color = t > FIN.BAND[0] && t < FIN.BAND[1] ? accent : base;
+
+    const first = Math.ceil(lead);
+    const last = Math.floor(trail);
+    for (let xx = Math.max(0, first); xx <= Math.min(last, size - 1); xx++) {
+      setPx(x + xx, y + yy, color);
+    }
+    const leadCov = first - lead;
+    if (leadCov > FIN_EDGE_FLOOR) {
+      setPx(x + first - 1, y + yy, fadeToUnlit(color, leadCov));
+    }
+    const trailCov = trail - last;
+    if (trailCov > FIN_EDGE_FLOOR && last + 1 < size) {
+      setPx(x + last + 1, y + yy, fadeToUnlit(color, trailCov));
+    }
   }
 }
 
