@@ -320,7 +320,13 @@ function airportLabel(a) {
   const avail = W - M.padX * 2;
   if (a.short && textW(a.short) <= avail) return a.short;
   if (a.city && textW(a.city) <= avail) return a.city;
-  return fitText(a.short || a.city || '', avail);
+  // A municipality is sometimes two towns, "Cincinnati / Covington", which
+  // overruns by a single character where the first name alone is comfortable.
+  const first = (a.city || '').split('/')[0].trim();
+  if (first && textW(first) <= avail) return first;
+  // Nothing fits, so chop the city rather than the official name: "Cincinnati
+  // / Covingt" still reads as a place, "Cincinnati Northern K" reads as nothing.
+  return fitText(a.city || a.short || '', avail);
 }
 
 // The bottom pane rotates through however many pages this aircraft can fill.
