@@ -17,6 +17,9 @@ const LOGO_ALIASES = {
   // EDV (Endeavor) now has its own mark, cropped from the swoosh - see CROPS
   // in tools/make_logos.py. Alias it to DAL if you'd rather see Delta's widget,
   // which is what its aircraft are actually painted in.
+  NJE: 'EJA',   // NetJets Europe   - same brand, same livery as NetJets. Its
+                //                    radarbox artwork is byte-identical, and
+                //                    EJA's mark comes from tools/fetch_logo_art.py
   ENY: 'AAL',   // Envoy Air        - American Eagle only
   JIA: 'AAL',   // PSA Airlines     - American Eagle only
   PDT: 'AAL',   // Piedmont         - American Eagle only
