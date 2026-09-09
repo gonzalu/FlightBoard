@@ -255,6 +255,20 @@ Reload the page and airlines appear with their own marks. Files are matched by
 off the callsign. Later directories act as fallbacks, used only when earlier
 artwork can't survive being reduced to a 28 px square.
 
+A handful of carriers aren't served well by that archive: their entry is a long
+wordmark that turns to mush at 28 px, while a good compact mark exists elsewhere.
+`tools/fetch_logo_art.py` pulls those specific files — currently NetJets' app
+icon and Flexjet's original vector, both of which are then cropped to the part
+that reads. It's a short hand-checked list, not a crawler. Run it before
+generating and put its directory first:
+
+```bash
+python3 tools/fetch_logo_art.py
+python3 tools/make_logos.py logo-sources/fetched     /tmp/logosrc/airline-logos-main/flightaware_logos     /tmp/logosrc/airline-logos-main/radarbox_logos     /tmp/logosrc/airline-logos-main/radarbox_banners     --size 28 --out frontend/logos.js
+```
+
+Skip it and those carriers just fall back to the archive, same as before.
+
 A few knobs at the top of `tools/make_logos.py`, all one-line entries:
 
 | | |
@@ -278,7 +292,9 @@ Some carriers' marks are just their name, and a seven-letter wordmark reduced to
 a 28 px tile gets about four pixels a letter and runs together. No amount of
 source resolution fixes that. `frontend/wordmarks.js` draws those as type
 instead, which stays sharp and is what an LED sign would really do; jetBlue
-ships as the worked example. An entry is only the text, since the colour comes
+ships as the worked example. Reach for it only when the carrier genuinely has no
+compact symbol anywhere, since the panel already prints the airline's name in
+the line beside the tile and a wordmark says it twice. An entry is only the text, since the colour comes
 from `AIRLINE_COLORS` in `panel.js`, and a listed wordmark is preferred to
 generated artwork.
 

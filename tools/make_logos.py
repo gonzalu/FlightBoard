@@ -86,7 +86,26 @@ CROPS = {
     # Endeavor's own logo is a thin script wordmark; the thick right-hand tip of
     # its twin swooshes survives the reduction where the whole mark doesn't.
     "EDV": ("radarbox_banners", (0.72, 0.02, 1.00, 0.55)),
+    # Two carriers whose usable art comes from tools/fetch_logo_art.py rather
+    # than the bulk archive, and which are all crop.
+    #
+    # NetJets: its app icon is the livery swoosh on a white tile. The fetcher
+    # removes the tile; this trims the empty corners so the bands fill the frame.
+    "EJA": ("fetched", (0.05, 0.30, 0.95, 0.95)),
+    # Flexjet: a full-height square off the right end of the original vector,
+    # which puts the tip of the swoosh in the corner and lets the sweep run out
+    # to the bottom left. Clear of the lettering, which ends at 0.78.
+    "LXJ": ("fetched", (0.836, 0.00, 1.00, 1.00)),
 }
+
+# Worth recording a thing that did NOT work, so nobody spends the afternoon on
+# it twice. An airline's favicon or phone-app icon looks like the ideal source,
+# being a mark its owner already had to make legible at 16 pixels. In practice
+# they mostly aren't marks at all: Flexjet's is a generic aeroplane that would
+# identify any carrier equally, and NetJets ships a crop of its livery stripes
+# as both favicon and app icon. Where an airline genuinely has no compact
+# symbol, setting the name as type beats hunting for one - see
+# frontend/wordmarks.js.
 
 
 def load_rgba(path, code=None):

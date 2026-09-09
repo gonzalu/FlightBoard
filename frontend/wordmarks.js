@@ -22,6 +22,14 @@ const WORDMARKS = {
 };
 
 /*
+ * NetJets was briefly listed here. Its app icon turned out to carry the livery
+ * swoosh once the white tile was stripped off, and a mark beats type when there
+ * is a real one to be had: the panel already prints the airline's name in the
+ * line beside the tile, so a wordmark says it twice. See tools/fetch_logo_art.py.
+ * The N, J and s glyphs below are left in place, ready for the next name.
+ */
+
+/*
  * Rows 0-6 are cap and ascender height, 2-6 the x-height band, 7-8 descenders.
  * Written as pictures so the letterforms can be read and edited by eye; the
  * column count of each glyph is its advance width.
@@ -58,6 +66,36 @@ const WORDMARK_FONT = {
       '-#',
       '--',
       '--'],
+
+  J: ['--#',
+      '--#',
+      '--#',
+      '--#',
+      '--#',
+      '#-#',
+      '-#-',
+      '---',
+      '---'],
+
+  N: ['#--#',
+      '##-#',
+      '##-#',
+      '#-##',
+      '#-##',
+      '#--#',
+      '#--#',
+      '----',
+      '----'],
+
+  s: ['---',
+      '---',
+      '-##',
+      '#--',
+      '-#-',
+      '--#',
+      '##-',
+      '---',
+      '---'],
 
   B: ['###-',
       '#--#',
