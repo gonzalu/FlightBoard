@@ -77,7 +77,11 @@ def strip_pale_field(img):
         seen[i] = 1
         if a:
             px[x, y] = (r, g, b, 0)
-        stack += [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
+        # only queue neighbours not already dealt with: pushing blindly peaked
+        # at 64 MB of stack on a 1920px source, which is a lot to ask of a Pi 3
+        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if 0 <= nx < w and 0 <= ny < h and not seen[ny * w + nx]:
+                stack.append((nx, ny))
     return img
 
 
