@@ -58,7 +58,15 @@ MIN_INK_COVERAGE = 0.08
 # grey tile against all sense. Every one of them chooses black on its own now. A
 # table that exists only to correct a bad measure is evidence the measure is
 # wrong: fix the measure and the table empties itself.
-BACKGROUND = {}
+BACKGROUND = {
+    # Midwest Aviation is a navy tail fin: dim (value 57) and only moderately
+    # saturated (98), so the rule reasonably calls for a light tile. It is worth
+    # overriding rather than loosening the rule, because the shape is unusually
+    # forgiving of lifting - a large solid area whose red leading edge and ring
+    # of stars survive it. Catching it by threshold would mean dropping the
+    # saturation limit below 98, which moves 60 other carriers with it.
+    "MWT": "dark",
+}
 
 # Ink dimmer than this (HSV value, not luminance, so saturated reds aren't
 # touched) is lifted when it has to sit on an unlit panel. This is the same
