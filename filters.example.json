@@ -1,0 +1,31 @@
+{
+  "_readme": [
+    "Copy this file to filters.json and edit that. Empty lists hide nothing.",
+    "It is re-read whenever it changes, so there is no restart to do.",
+    "Any key starting with an underscore is ignored: use them for your notes.",
+    "Everything matches exactly except types, which match as substrings."
+  ],
+
+  "exclude": {
+    "_hex": "ICAO 24-bit addresses, exactly as the receiver reports them",
+    "hex": [],
+
+    "_airlines": "ICAO prefixes read off the callsign, eg SWA, FDX, JBU",
+    "airlines": [],
+
+    "_registrations": "tail numbers, eg N123AB. Needs a lookup, so an aircraft may appear briefly before it is hidden",
+    "registrations": [],
+
+    "_types": "substring match: CRJ hides CRJ 900, CRJ-900 and CRJ 900 LR NG alike",
+    "types": [],
+
+    "_airports": "IATA codes; hides a flight with that airport at either end, eg LGA"
+    ,"airports": []
+  },
+
+  "_altitude_ft": "Feet. null means no limit. Aircraft on the ground read as 0, so a min of 1 drops them.",
+  "altitude_ft": {
+    "min": 0,
+    "max": null
+  }
+}

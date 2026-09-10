@@ -15,3 +15,6 @@ airline-logos-main/
 
 # Your settings, including your coordinates. Copy flightboard.env.example.
 flightboard.env
+
+# Which aircraft you hide. Copy filters.example.json.
+filters.json

@@ -16,7 +16,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import config
+from . import config, filters
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("flightboard")
@@ -203,8 +203,29 @@ def _receiver_name(url):
     return host.split(".")[0]
 
 
+def _excluded(rules, hexid, flight, altitude):
+    """The exclusions that need only what the aircraft broadcasts.
+
+    Kept separate from the rest so it can run before enrichment: an aircraft
+    hidden by hex, airline or altitude then costs no lookups at all. Rules that
+    need a lookup first - registration, type, airport - are applied below.
+    """
+    if hexid and hexid.lower() in rules.hex:
+        return True
+    if rules.airlines:
+        prefix = re.match(r"^([A-Z]{3})\d", flight)
+        if prefix and prefix.group(1) in rules.airlines:
+            return True
+    # An unknown altitude is not a reason to hide an aircraft that is otherwise
+    # in range: absent data shouldn't act like a filter nobody configured.
+    if altitude is not None:
+        if not rules.min_ft <= altitude <= rules.max_ft:
+            return True
+    return False
+
+
 def _entry(ac):
-    """One aircraft from a receiver, or None if it has no position or is out of range."""
+    """One aircraft from a receiver, or None if it is out of range or excluded."""
     lat, lon = ac.get("lat"), ac.get("lon")
     if lat is None or lon is None:
         return None
@@ -215,12 +236,17 @@ def _entry(ac):
     flight = (ac.get("flight") or "").strip()
     alt_raw = ac.get("alt_baro")
     on_ground = alt_raw == "ground"
+    altitude = 0 if on_ground else alt_raw
+    rules = filters.current()
+    if _excluded(rules, ac.get("hex"), flight, altitude):
+        return None
+
     entry = {
         "hex": ac.get("hex"),
         "flight": flight,
         "lat": lat,
         "lon": lon,
-        "alt_baro": 0 if on_ground else alt_raw,
+        "alt_baro": altitude,
         "on_ground": on_ground,
         "gs": ac.get("gs"),
         "track": ac.get("track"),
@@ -234,10 +260,18 @@ def _entry(ac):
         if flight:
             route = _enrichment(f"route:{flight}")
             if route:
-                entry["route"] = _leg(route, lat, lon, ac.get("gs"))
+                leg = _leg(route, lat, lon, ac.get("gs"))
+                if rules.hides_route(leg):
+                    return None
+                entry["route"] = leg
         if entry["hex"]:
             info = _enrichment(f"type:{entry['hex']}")
             if info:
+                reg = (info.get("registration") or "").upper()
+                if reg and reg in rules.registrations:
+                    return None
+                if rules.hides_type(info.get("type")):
+                    return None
                 entry["aircraft_info"] = info
     return entry
 
@@ -298,6 +332,9 @@ def _log_config():
              config.HOME_LAT, config.HOME_LON, config.MAX_RANGE_NM)
     for url in config.RECEIVERS:
         log.info("receiver %s -> %s", _receiver_name(url), url)
+    hidden = filters.current().active()
+    log.info("hiding: %s", hidden) if hidden else log.info(
+        "hiding nothing (%s)", filters.FILTERS_FILE)
     if (config.HOME_LAT, config.HOME_LON) == (0.0, 0.0):
         log.warning(
             "FLIGHTBOARD_HOME_LAT and FLIGHTBOARD_HOME_LON are not set, so home is "

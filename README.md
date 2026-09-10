@@ -42,6 +42,7 @@ uses, and every dot you see is an individually addressed LED.
     + [Option B — Raspberry Pi on HDMI](#option-b--raspberry-pi-on-hdmi)
     + [Option C — just a browser](#option-c--just-a-browser)
   * [Keeping it up to date](#keeping-it-up-to-date)
+  * [Hiding traffic you don't want](#hiding-traffic-you-dont-want)
   * [Configuration reference](#configuration-reference)
   * [How it works](#how-it-works)
   * [Troubleshooting](#troubleshooting)
@@ -430,11 +431,63 @@ journalctl -u flightboard-backend -f
 
 ---
 
+## Hiding traffic you don't want
+
+Busy airspace puts a lot on the board that you may not care about. Copy the
+example and edit your own copy, which is gitignored:
+
+```bash
+cp filters.example.json filters.json
+```
+
+```json
+{
+  "exclude": {
+    "hex": ["a1b2c3"],
+    "airlines": ["SWA", "FDX"],
+    "registrations": ["N123AB"],
+    "types": ["CRJ"],
+    "airports": ["LGA"]
+  },
+  "altitude_ft": { "min": 3000, "max": null }
+}
+```
+
+Every section is optional and an empty list hides nothing.
+
+| Section | Matches |
+|---|---|
+| `hex` | ICAO 24-bit address, exactly |
+| `airlines` | the ICAO prefix of the callsign, so `SWA` catches `SWA3010` |
+| `registrations` | tail number, exactly |
+| `types` | **substring**, so `CRJ` catches `CRJ 900`, `CRJ-900` and `CRJ 900 LR NG` alike |
+| `airports` | IATA code at *either* end of the route |
+| `altitude_ft` | `min` and `max` in feet; `null` for no limit |
+
+**It is re-read whenever the file changes**, so edit it and the board catches up
+within a poll. Nothing to restart. Save a syntax error and the last rules that
+parsed stay in force, with a note in the log, rather than every filter vanishing
+because of a stray comma.
+
+Two things worth knowing. Aircraft on the ground report as 0 feet, so a `min` of
+`1` drops them, and an aircraft reporting no altitude at all is kept rather than
+hidden, since missing data shouldn't act like a filter you didn't ask for. And
+`hex`, `airlines` and `altitude_ft` match what the aircraft broadcasts, so they
+cost nothing, while `registrations`, `types` and `airports` need a lookup first
+and may let an aircraft show for a moment before it disappears.
+
+The startup log says what is being hidden, which is the first place to look when
+something you expected doesn't appear.
+
+---
+
 ## Configuration reference
 
 All settings are read at startup from, in order: the environment, then
 `flightboard.env` beside the checkout, then the defaults below. Put yours in the
-file and use the environment to override one for a single run.
+file and use the environment to override one for a single run. Which aircraft
+you *hide* is separate, and lives in `filters.json` — see
+[Hiding traffic you don't want](#hiding-traffic-you-dont-want).
 
 | Variable | Default | What it does |
 |---|---|---|

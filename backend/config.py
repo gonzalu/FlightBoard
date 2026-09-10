@@ -93,6 +93,7 @@ HOME_LON = float(_get("FLIGHTBOARD_HOME_LON", "0.0"))
 # Only show aircraft within this radius (nautical miles).
 MAX_RANGE_NM = float(_get("FLIGHTBOARD_MAX_RANGE_NM", "40"))
 
+
 # An airport this close to home counts as "local", which is what turns a route
 # into "Arriving from ..." / "Departing to ..." instead of naming both ends.
 LOCAL_AIRPORT_NM = float(_get("FLIGHTBOARD_LOCAL_AIRPORT_NM", "30"))
