@@ -41,6 +41,7 @@ uses, and every dot you see is an individually addressed LED.
     + [Option A — Chromecast](#option-a--chromecast)
     + [Option B — Raspberry Pi on HDMI](#option-b--raspberry-pi-on-hdmi)
     + [Option C — just a browser](#option-c--just-a-browser)
+  * [Keeping it up to date](#keeping-it-up-to-date)
   * [Configuration reference](#configuration-reference)
   * [How it works](#how-it-works)
   * [Troubleshooting](#troubleshooting)
@@ -215,9 +216,9 @@ systemctl status flightboard-backend
 
 The unit file has an `EDIT THESE` block, and it is only the account name and
 two paths — your coordinates and receivers stay in `flightboard.env`, which the
-unit reads with `EnvironmentFile=`. Change a setting later by editing that file
-and running `sudo systemctl restart flightboard-backend`; you only need
-`daemon-reload` if you edit the unit itself.
+unit reads with `EnvironmentFile=`. See
+[Keeping it up to date](#keeping-it-up-to-date) for what a later change needs,
+and what it doesn't.
 
 ---
 
@@ -264,7 +265,11 @@ generating and put its directory first:
 
 ```bash
 python3 tools/fetch_logo_art.py
-python3 tools/make_logos.py logo-sources/fetched     /tmp/logosrc/airline-logos-main/flightaware_logos     /tmp/logosrc/airline-logos-main/radarbox_logos     /tmp/logosrc/airline-logos-main/radarbox_banners     --size 28 --out frontend/logos.js
+python3 tools/make_logos.py logo-sources/fetched \
+    /tmp/logosrc/airline-logos-main/flightaware_logos \
+    /tmp/logosrc/airline-logos-main/radarbox_logos \
+    /tmp/logosrc/airline-logos-main/radarbox_banners \
+    --size 28 --out frontend/logos.js
 ```
 
 Skip it and those carriers just fall back to the archive, same as before.
@@ -366,6 +371,62 @@ TV on and off on a schedule over HDMI-CEC, which makes it feel built in.
 ### Option C — just a browser
 
 Open the URL and press F11. Perfectly good on a spare monitor.
+
+---
+
+## Keeping it up to date
+
+Most of the time this is the whole thing, and the restart is harmless when it
+wasn't needed:
+
+```bash
+cd ~/flightboard && git pull && sudo systemctl restart flightboard-backend
+```
+
+What actually needs what:
+
+| Changed | What's needed |
+|---|---|
+| anything in `frontend/` | nothing at all — see *Displays update themselves* below |
+| anything in `backend/` | `sudo systemctl restart flightboard-backend` |
+| `flightboard.env` | a restart; settings are read once, at startup |
+| `flightboard-backend.service` | `sudo systemctl daemon-reload`, then a restart |
+| `tools/make_logos.py`, `tools/fetch_logo_art.py` | regenerate the logos — see below |
+
+**`frontend/logos.js` does not arrive with a `git pull`.** It is generated from
+artwork you fetch locally and is gitignored, so when the generator changes your
+existing copy stays exactly as it was and the new marks never appear. That is
+the one update that isn't automatic:
+
+```bash
+cd ~/flightboard
+python3 tools/fetch_logo_art.py
+mkdir -p /tmp/logosrc && cd /tmp/logosrc
+curl -sL https://codeload.github.com/Jxck-S/airline-logos/tar.gz/refs/heads/main | tar -xz
+cd ~/flightboard
+python3 tools/make_logos.py logo-sources/fetched \
+    /tmp/logosrc/airline-logos-main/flightaware_logos \
+    /tmp/logosrc/airline-logos-main/radarbox_logos \
+    /tmp/logosrc/airline-logos-main/radarbox_banners \
+    --size 28 --out frontend/logos.js
+rm -rf /tmp/logosrc                    # ~150 MB of source artwork, no longer needed
+```
+
+Check the free space first if this is a long-running feeder Pi. No restart
+afterwards: `logos.js` is a frontend file like any other.
+
+**Displays update themselves.** A cast page loads its URL once and would
+otherwise render the same build for months, so `/api/aircraft` carries a
+fingerprint of the whole `frontend/` directory and the panel reloads when it
+changes. New files count as well as changed ones, so a Chromecast picks up a
+release that adds a script without being re-cast. The fingerprint is computed
+per request, which is why a frontend change needs no restart.
+
+To watch the backend the way you would a foreground `uvicorn`:
+
+```bash
+journalctl -u flightboard-backend -f
+```
 
 ---
 
