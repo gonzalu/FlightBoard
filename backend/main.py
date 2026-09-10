@@ -393,6 +393,9 @@ def _build_id():
 async def get_aircraft():
     return {
         "home": {"lat": config.HOME_LAT, "lon": config.HOME_LON},
+        # null unless filters.json failed to parse, in which case nothing is
+        # being hidden and the reason belongs somewhere the operator will see it
+        "filters_error": filters.error(),
         "max_range_nm": config.MAX_RANGE_NM,
         "build": _build_id(),
         "updated": _state["updated"],

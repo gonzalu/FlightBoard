@@ -464,6 +464,16 @@ Every section is optional and an empty list hides nothing.
 | `airports` | IATA code at *either* end of the route |
 | `altitude_ft` | `min` and `max` in feet; `null` for no limit |
 
+Check an edit before wondering why nothing happened. JSON is unforgiving and
+every value has to be a quoted string, so `["LGA"]` and never `[LGA]`:
+
+```bash
+python3 -m backend.filters
+```
+
+It prints what is being hidden, or the exact line of the problem and a non-zero
+exit code.
+
 **It is re-read whenever the file changes**, so edit it and the board catches up
 within a poll. Nothing to restart. Save a syntax error and the last rules that
 parsed stay in force, with a note in the log, rather than every filter vanishing
@@ -547,6 +557,13 @@ filtered out by distance.
 Your location is set, so this is genuine. Check
 `curl http://YOUR-SERVER:8090/api/aircraft`, confirm the coordinates are really
 yours and not transposed, and try widening `FLIGHTBOARD_MAX_RANGE_NM`.
+
+**A filter isn't taking effect**
+The file almost certainly didn't parse, in which case the last rules that *did*
+parse stay in force and yours are ignored. Run `python3 -m backend.filters` to
+see the offending line. `/api/aircraft` also carries a `filters_error` field,
+null when the file is good. The commonest mistake is an unquoted value: JSON
+needs `["LGA"]`, not `[LGA]`.
 
 **It says "NO FEED"**
 The backend can't reach a receiver. Test the URL directly with `curl`. The API's

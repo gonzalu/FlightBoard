@@ -3,7 +3,9 @@
     "Copy this file to filters.json and edit that. Empty lists hide nothing.",
     "It is re-read whenever it changes, so there is no restart to do.",
     "Any key starting with an underscore is ignored: use them for your notes.",
-    "Everything matches exactly except types, which match as substrings."
+    "Everything matches exactly except types, which match as substrings.",
+    "Every value is a quoted string in a list: [\"LGA\", \"JFK\"], never [LGA].",
+    "Check your edit with: python3 -m backend.filters"
   ],
 
   "exclude": {
@@ -19,8 +21,8 @@
     "_types": "substring match: CRJ hides CRJ 900, CRJ-900 and CRJ 900 LR NG alike",
     "types": [],
 
-    "_airports": "IATA codes; hides a flight with that airport at either end, eg LGA"
-    ,"airports": []
+    "_airports": "IATA codes; hides a flight with that airport at either end",
+    "airports": []
   },
 
   "_altitude_ft": "Feet. null means no limit. Aircraft on the ground read as 0, so a min of 1 drops them.",

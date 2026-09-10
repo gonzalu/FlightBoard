@@ -95,12 +95,20 @@ def _as_number(value, default):
 
 _rules = Rules()
 _stamp = None            # (mtime_ns, size) of the file the rules came from
+_error = None            # why the file was rejected, if it was
 _complained = False      # so a broken file doesn't log on every poll
+
+
+def error():
+    """Why the file was last rejected, or None. Reported by /api/aircraft,
+    because a filter file that silently does nothing is worse than one that
+    obviously does nothing."""
+    return _error
 
 
 def current():
     """The active rules, re-reading the file if it has changed on disk."""
-    global _rules, _stamp, _complained
+    global _rules, _stamp, _error, _complained
     try:
         st = FILTERS_FILE.stat()
         stamp = (st.st_mtime_ns, st.st_size)
@@ -110,17 +118,33 @@ def current():
         return _rules
     _stamp = stamp
     if stamp is None:
-        _rules, _complained = Rules(), False
+        _rules, _error, _complained = Rules(), None, False
         return _rules
     try:
         data = json.loads(FILTERS_FILE.read_text(encoding="utf-8"))
         _rules = Rules(data)
-        _complained = False
+        _error, _complained = None, False
         log.info("filters reloaded: %s", _rules.active() or "nothing hidden")
     except Exception as e:
         # keep whatever last parsed: a typo shouldn't silently unhide everything
+        _error = f"{FILTERS_FILE.name}: {e}"
         if not _complained:
             log.warning("%s could not be read (%s); keeping the previous filters",
                         FILTERS_FILE, e)
             _complained = True
     return _rules
+
+
+if __name__ == "__main__":
+    # `python3 -m backend.filters` — check the file before wondering why the
+    # board ignored it. Editing JSON by hand and getting no feedback is how a
+    # bare LGA instead of "LGA" costs an afternoon.
+    import sys
+    logging.basicConfig(level=logging.CRITICAL)
+    rules = current()
+    print(FILTERS_FILE)
+    if error():
+        print("  INVALID: " + error())
+        print("  Nothing is being hidden. Values must be quoted: [\"LGA\"], not [LGA].")
+        sys.exit(1)
+    print("  hiding: " + (rules.active() or "nothing"))
