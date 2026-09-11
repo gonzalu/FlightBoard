@@ -24,3 +24,30 @@ const LOGO_ALIASES = {
   JIA: 'AAL',   // PSA Airlines     - American Eagle only
   PDT: 'AAL',   // Piedmont         - American Eagle only
 };
+
+/*
+ * Logos for operators that aren't airlines.
+ *
+ * Police, air ambulance, tour and survey operators fly aircraft whose callsign
+ * is just a registration, so there is no ICAO prefix to key a logo off and no
+ * entry in any airline archive either. What there *is*, now that the backend
+ * asks hexdb, is a registered owner's name. Map a piece of that name to a code,
+ * drop matching artwork into your logo source directory as <CODE>.png, and the
+ * board draws it.
+ *
+ *   'NEW YORK CITY POLICE': 'NYPD'    with logo-sources/custom/NYPD.png
+ *
+ * Matched as an uppercase substring of the owner, so a partial name is enough
+ * and spelling variations further along don't matter. The longest matching
+ * entry wins, which is how a specific operator can sit alongside a general one.
+ * Keep entries long enough to be unambiguous: 'POLICE' alone would collect
+ * every force in the country under one badge.
+ *
+ * Operators that DO have an ICAO code need nothing here. hexdb reports it and
+ * the normal logo lookup takes over, which is how a NetJets bizjet flying as
+ * N741QS gets the NetJets mark.
+ */
+const OPERATOR_LOGOS = {
+  // Add your own. Nothing ships here, because which operators fly over you is
+  // the one thing this project can't guess.
+};

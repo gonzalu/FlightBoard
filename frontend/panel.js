@@ -120,6 +120,37 @@ function airlineKey(callsign) {
   return (typeof LOGO_ALIASES !== 'undefined' && LOGO_ALIASES[m[1]]) || m[1];
 }
 
+/*
+ * A logo key for an aircraft whose callsign carries no airline prefix.
+ *
+ * Two ways in. hexdb reports an operator's ICAO code, which covers anything
+ * with a real one - a NetJets bizjet flying as N741QS is still EJA, and the
+ * mark already exists. Failing that, the registered owner's name is matched
+ * against OPERATOR_LOGOS for the operators that have no code at all: police,
+ * air ambulance, tour flights.
+ */
+function operatorKey(info) {
+  // That code is not always an operator. For light aircraft hexdb frequently
+  // puts the *type* there instead, so a Bell 429 arrives as "B429" and a 407 as
+  // "B407". Only trust it when it names a mark we actually hold, which lets the
+  // rubbish fall through to the owner's name below instead of blocking it.
+  if (info.operator_code) {
+    const code = (typeof LOGO_ALIASES !== 'undefined' && LOGO_ALIASES[info.operator_code])
+      || info.operator_code;
+    const known = (typeof LOGOS !== 'undefined' && LOGOS[code])
+      || (typeof WORDMARKS !== 'undefined' && WORDMARKS[code]);
+    if (known) return code;
+  }
+  const owner = (info.owner || '').toUpperCase();
+  if (!owner || typeof OPERATOR_LOGOS === 'undefined') return null;
+  // longest match first, so a specific entry beats a broader one
+  const names = Object.keys(OPERATOR_LOGOS).sort((a, b) => b.length - a.length);
+  for (const name of names) {
+    if (owner.includes(name)) return OPERATOR_LOGOS[name];
+  }
+  return null;
+}
+
 function hsl(h, s, l) {
   s /= 100; l /= 100;
   const k = n => (n + h / 30) % 12;
@@ -429,7 +460,11 @@ function buildFlightFrame(ac, page) {
   const callsign = ac.flight || ac.hex.toUpperCase();
 
   if (M.logo) {
-    const key = airlineKey(callsign);
+    // Deliberately ac.flight, not callsign: callsign falls back to the hex when
+    // an aircraft transmits no ident, and a hex looks exactly like a callsign to
+    // airlineKey - "ACB1F5" reads as the airline "ACB". Those are the aircraft
+    // that most need the operator lookup, so mis-keying them is the worst case.
+    const key = airlineKey(ac.flight || '') || operatorKey(info);
     // With no airline, hash the registered owner rather than falling back to
     // one grey for everybody. A quarter of the traffic over a city is general
     // aviation, and every last aircraft of it drew the same tile: an NYPD

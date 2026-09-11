@@ -297,6 +297,31 @@ decision is made on the ink's HSV *value*, not its luminance.
 `frontend/logo-aliases.js` maps a callsign prefix to another carrier's logo,
 which is how regional airlines get their mainline partner's tail.
 
+**Operators that aren't airlines** are handled in the same file. Police, air
+ambulance, tour and survey aircraft fly under a bare registration, so there's no
+callsign prefix to key a logo off. Two things cover them. Where the operator has
+a real ICAO code, hexdb reports it and the normal lookup takes over by itself —
+that's how a NetJets bizjet flying as `N741QS` gets the NetJets mark. Where it
+has no code at all, map part of the registered owner's name in `OPERATOR_LOGOS`
+and supply the artwork:
+
+```js
+const OPERATOR_LOGOS = {
+  'NEW YORK CITY POLICE': 'NYPD',
+};
+```
+
+Then drop `NYPD.png` into a source directory and put that directory first when
+generating:
+
+```bash
+python3 tools/make_logos.py logo-sources/custom logo-sources/fetched     /tmp/logosrc/airline-logos-main/flightaware_logos ...
+```
+
+The name is matched as an uppercase substring of the owner, so a partial name is
+enough, and the longest matching entry wins. Keep entries specific: `POLICE`
+alone would put one badge on every force in the country.
+
 Some carriers' marks are just their name, and a seven-letter wordmark reduced to
 a 28 px tile gets about four pixels a letter and runs together. No amount of
 source resolution fixes that. `frontend/wordmarks.js` draws those as type

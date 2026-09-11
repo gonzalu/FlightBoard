@@ -160,6 +160,10 @@ def _parse_hexdb_aircraft(body):
         "type": _ascii(body.get("Type")),
         "manufacturer": _ascii(body.get("Manufacturer")),
         "owner": _ascii(body.get("RegisteredOwners")),
+        # The operator's ICAO code, which is how an aircraft with no airline
+        # prefix in its callsign can still be drawn with its airline's mark: a
+        # NetJets bizjet flying as N741QS reports EJA here.
+        "operator_code": (body.get("OperatorFlagCode") or "").strip().upper() or None,
     }
 
 
