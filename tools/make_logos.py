@@ -87,6 +87,21 @@ LIFT_TARGET_V = 225
 # ordinary path over a special case.
 KNOCK_COLOURED_BG = set()
 
+# Carriers whose artwork is rejected outright, so they fall back to the
+# generated tail fin. Not every mark can survive 28 pixels: Tradewind's is a
+# ring of ten tiny aircraft and Slate's a fine line drawing, and both reduce to
+# scattered specks on a glaring pale tile. The fin is plainly better.
+#
+# This has to be judged by eye. The obvious proxy - how much of the tile is ink
+# rather than background - does not work: Tradewind measures 20% and Spirit,
+# which reads perfectly, measures 19%. What separates them is connected strokes
+# against scattered detail, and that is not worth trying to measure.
+# Look at /logos.html and trust your eyes.
+PREFER_TAIL_FIN = {
+    "GPD",   # Tradewind Aviation - a ring of ten aircraft, each 4px across
+    "SGX",   # Slate Aviation - fine line art on white
+}
+
 # Carriers with no usable square mark, where a square region of a wider logo
 # works instead. The fractions are (x0, y0, x1, y1) of that specific directory's
 # artwork, squared about their centre, so the directory is named alongside them.
@@ -172,8 +187,15 @@ def lift_ink(img):
     mean_v = sum(vals) / len(vals)
     if mean_v >= LIFT_BELOW_V:
         return img
-    factor = LIFT_TARGET_V / mean_v
-    v = v.point(lambda p: min(255, int(p * factor)))
+    if mean_v < 1:
+        # Pure black ink, which scaling cannot lift: any multiple of zero is
+        # zero, and dividing by it throws. Set the value outright instead, so a
+        # black silhouette becomes a white one, which is the only way it can
+        # show at all on a panel whose "off" is also black.
+        v = v.point(lambda p: LIFT_TARGET_V)
+    else:
+        factor = LIFT_TARGET_V / mean_v
+        v = v.point(lambda p: min(255, int(p * factor)))
     out = Image.merge("HSV", (h, s, v)).convert("RGB").convert("RGBA")
     out.putalpha(alpha)
     return out
@@ -232,6 +254,8 @@ def square_crop(img, frac):
 
 def build(path, size, code):
     """Render one source image, or raise/return None if it isn't usable."""
+    if code in PREFER_TAIL_FIN:
+        return None, "artwork reduces to noise at this size; tail fin is better"
     src = load_rgba(path, code)
     # Art still fully opaque at this point brought its own background - Republic's
     # navy tile, United's blue. That block is part of the mark, so neither the
