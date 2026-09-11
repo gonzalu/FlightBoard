@@ -430,9 +430,15 @@ function buildFlightFrame(ac, page) {
 
   if (M.logo) {
     const key = airlineKey(callsign);
+    // With no airline, hash the registered owner rather than falling back to
+    // one grey for everybody. A quarter of the traffic over a city is general
+    // aviation, and every last aircraft of it drew the same tile: an NYPD
+    // helicopter looked exactly like a Cessna. Hashing the owner gives each
+    // operator its own stable colour instead.
+    const identity = airline || info.owner || '';
     const [base, accent] =
       (typeof AIRLINE_COLORS !== 'undefined' && AIRLINE_COLORS[key])
-      || (airline ? hashColors(airline) : [0x243039, 0x51707f]);
+      || (identity ? hashColors(identity) : [0x243039, 0x51707f]);
     drawLogo(M.logo, key, base, accent);
   }
 
@@ -441,8 +447,15 @@ function buildFlightFrame(ac, page) {
   const route = (ac.route && ac.route.origin && ac.route.destination)
     ? `${ac.route.origin}${M.routeSep}${ac.route.destination}`
     : `${ac.distance_nm.toFixed(1)}NM`;
+  // hexdb often gives a bare model number - "429", "407", "G450" - which means
+  // nothing on its own, so name the maker too where there's room. adsbdb's
+  // "CRJ 900 ER NG" already reads fine and is too long to prefix anyway.
+  const maker = info.manufacturer && info.type
+    && !info.type.toUpperCase().includes(info.manufacturer.toUpperCase())
+      ? `${info.manufacturer} ${info.type}` : '';
+  const model = (maker && textW(maker) <= availW) ? maker : info.type;
   // line 1 already carries the callsign, so don't repeat it here
-  const detail = info.type || (info.registration !== callsign ? info.registration : '') || '';
+  const detail = model || (info.registration !== callsign ? info.registration : '') || '';
 
   drawText(TEXT_X, M.lines[0], fitText(title, availW), C_TEXT);
   drawText(TEXT_X, M.lines[1], fitText(route, availW), C_TEXT);
