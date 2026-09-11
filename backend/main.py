@@ -276,6 +276,29 @@ def _receiver_name(url):
     return host.split(".")[0]
 
 
+# Fastest recorded ground speed for an airliner is around 800 kt, a 747 riding
+# an exceptional jet stream. Below the transition altitude nothing civil comes
+# close, and US airspace caps most traffic at 250 kt there anyway.
+MAX_GS_KT = 800.0
+MAX_GS_LOW_KT = 450.0
+LOW_ALTITUDE_FT = 10000
+
+
+def _plausible_speed(gs, altitude):
+    """Ground speed the aircraft could actually be doing, or None.
+
+    Corrupted ADS-B surfaces as absurd figures: a Delta A321 was reported at
+    784 kt over the Bronx at 7,350 ft, and the number moved every poll. Same
+    principle as the ETA guard below - say nothing rather than print a figure
+    that is certainly wrong.
+    """
+    if gs is None or gs < 0:
+        return None
+    ceiling = (MAX_GS_LOW_KT if altitude is not None and altitude < LOW_ALTITUDE_FT
+               else MAX_GS_KT)
+    return gs if gs <= ceiling else None
+
+
 def _excluded(rules, hexid, flight, altitude):
     """The exclusions that need only what the aircraft broadcasts.
 
@@ -321,7 +344,7 @@ def _entry(ac):
         "lon": lon,
         "alt_baro": altitude,
         "on_ground": on_ground,
-        "gs": ac.get("gs"),
+        "gs": _plausible_speed(ac.get("gs"), altitude),
         "track": ac.get("track"),
         "baro_rate": ac.get("baro_rate"),
         "squawk": ac.get("squawk"),
@@ -333,7 +356,7 @@ def _entry(ac):
         if flight:
             route = _enrichment(f"route:{flight}")
             if route:
-                leg = _leg(route, lat, lon, ac.get("gs"))
+                leg = _leg(route, lat, lon, entry["gs"])
                 if rules.hides_route(leg):
                     return None
                 entry["route"] = leg
