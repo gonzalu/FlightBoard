@@ -98,7 +98,8 @@ KNOCK_COLOURED_BG = set()
 # against scattered detail, and that is not worth trying to measure.
 # Look at /logos.html and trust your eyes.
 PREFER_TAIL_FIN = {
-    "GPD",   # Tradewind Aviation - a ring of ten aircraft, each 4px across
+    # Tradewind was here until its mark was redrawn by hand at 28x28 rather
+    # than reduced to it; see the pass-through in build() below.
     "SGX",   # Slate Aviation - fine line art on white
 }
 
@@ -257,6 +258,18 @@ def build(path, size, code):
     if code in PREFER_TAIL_FIN:
         return None, "artwork reduces to noise at this size; tail fin is better"
     src = load_rgba(path, code)
+
+    # Art that already arrives at exactly the target size is taken as drawn:
+    # no crop, no rescale, no lift. Someone handing over a 28x28 tile has placed
+    # every LED deliberately, and everything below would undo that - fit_square
+    # alone would crop it to its ink and scale it back up. This is the escape
+    # hatch for marks that cannot be reduced and have to be drawn instead.
+    if src.size == (size, size):
+        palette, data = encode(src, size, False)
+        if data.count("0") == len(data):
+            return None, "hand-drawn tile is empty"
+        return {"p": palette, "d": data, "_light": False}, None
+
     # Art still fully opaque at this point brought its own background - Republic's
     # navy tile, United's blue. That block is part of the mark, so neither the
     # light tile nor the lift applies: both would repaint a colour the airline chose.
