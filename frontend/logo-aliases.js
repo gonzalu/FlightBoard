@@ -48,6 +48,7 @@ const LOGO_ALIASES = {
  * N741QS gets the NetJets mark.
  */
 const OPERATOR_LOGOS = {
-  // Add your own. Nothing ships here, because which operators fly over you is
-  // the one thing this project can't guess.
+  // A worked example, and the author's local one. Remove it if you like: an
+  // entry with no matching artwork simply falls back to a tail fin.
+  'NEW YORK CITY POLICE': 'NYPD',
 };

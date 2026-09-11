@@ -104,6 +104,10 @@ CROPS = {
     # which puts the tip of the swoosh in the corner and lets the sweep run out
     # to the bottom left. Clear of the lettering, which ends at 0.78.
     "LXJ": ("fetched", (0.836, 0.00, 1.00, 1.00)),
+    # NYPD, hand-saved into logo-sources/custom from their own site: the shield
+    # is far too detailed to reduce, the lettering beside it is not. Keeping
+    # only the letters gives a mark that still reads at 28px.
+    "NYPD": ("custom", (0.312, 0.28, 1.00, 0.71)),
 }
 
 # Worth recording a thing that did NOT work, so nobody spends the afternoon on

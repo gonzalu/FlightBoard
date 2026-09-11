@@ -19,6 +19,11 @@ Then put that directory FIRST, so it wins wherever it has something:
 Most of these need cropping to the part that reads; see CROPS in make_logos.py,
 whose entries name this directory.
 
+Not everything can be fetched. nyc.gov, for one, answers a plain client with
+403 and a browser with the file, so NYPD's logo is hand-saved into
+logo-sources/custom instead. This tool is not going to claim to be a browser to
+get round that.
+
 A note on what doesn't work, so nobody repeats it: an airline's *favicon* looks
 like the ideal source, being a mark its owner already had to make legible at 16
 pixels. In practice they are rarely marks. Flexjet's is a generic aeroplane that
