@@ -516,7 +516,7 @@ you *hide* is separate, and lives in `filters.json` — see
 | `FLIGHTBOARD_LOCAL_AIRPORT_NM` | `30` | An airport this close counts as "local", which turns a route into *Arriving from…* / *Departing to…* |
 | `FLIGHTBOARD_MAX_AIRCRAFT` | `60` | Cap on how many aircraft the API returns. |
 | `FLIGHTBOARD_POLL_INTERVAL` | `2` | Seconds between receiver polls. |
-| `FLIGHTBOARD_ENABLE_ENRICH` | `1` | Set `0` to disable adsbdb lookups and run fully offline. |
+| `FLIGHTBOARD_ENABLE_ENRICH` | `1` | Set `0` to disable adsbdb and hexdb lookups and run fully offline. |
 | `FLIGHTBOARD_ENRICH_TTL` | `3600` | Seconds to cache an airline/route/type lookup. |
 | `FLIGHTBOARD_PORT` | `8090` | Port. |
 
@@ -531,17 +531,32 @@ through), `SKIP_GROUND` (whether to include aircraft on the ground).
 ```
 your receiver(s) ──aircraft.json──> FlightBoard backend ──/api/aircraft──> panel / dashboard
                                            │
-                                           └── adsbdb.com  (optional: airline, route, type)
+                                           ├── adsbdb.com  (optional: airline, route, type)
+                                           └── hexdb.io    (optional: owner, and the gaps)
 ```
 
 The **backend** polls every receiver every couple of seconds, merges the aircraft
 (freshest position wins on duplicates), works out distance and bearing from your
 location, and serves both the API and the frontend from one origin.
 
-Airline, route and aircraft type come from [adsbdb](https://www.adsbdb.com/) —
-free, no key. Those lookups run in a **background worker**, never inside the poll
-loop, so a burst of unknown aircraft can't stall the position feed. Results are
-cached, including negative ones, and served stale while they refresh.
+Airline, route and aircraft type come from [adsbdb](https://www.adsbdb.com/),
+with [hexdb.io](https://hexdb.io/) behind it. Both are free and keyless. Those
+lookups run in a **background worker**, never inside the poll loop, so a burst
+of unknown aircraft can't stall the position feed. Results are cached, including
+negative ones, and served stale while they refresh.
+
+The two sources are combined differently on purpose. A **route** stops at the
+first answer, because adsbdb returns full airport records and that is what gives
+the board place names, a progress bar and an ETA, while hexdb returns bare
+codes. An **aircraft record** is *merged* across both, because adsbdb has the
+better type and manufacturer but only hexdb carries the registered owner.
+
+That owner matters more than it sounds. Roughly a quarter of the traffic over a
+city is general aviation broadcasting a tail number with no airline at all, and
+until it arrives the board has nothing to say about any of them. With it, a
+helicopter over the Bronx reads *Operated by / Helicopters Inc* rather than
+nothing. The page is skipped for airliners, where it would only repeat the name
+already on the line above.
 
 The **panel** is a genuine emulation. `frontend/glcdfont.js` is the Adafruit GFX
 classic 5×7 bitmap font — the same table the hardware draws with — blitted one
@@ -580,7 +595,8 @@ down. The board keeps showing the last good data for 90 seconds before giving up
 so brief network blips don't blank the display.
 
 **Airlines and routes are missing, but altitude and speed are fine**
-That's adsbdb being unreachable, or the aircraft genuinely being unknown — GA
+That's both lookup services being unreachable, or the aircraft genuinely being
+unknown — GA
 aircraft have no airline. Check outbound internet, or set
 `FLIGHTBOARD_ENABLE_ENRICH=0` if you meant to run offline.
 
@@ -606,6 +622,11 @@ kiosk mode.
   `frontend/glcdfont.js`.
 - **[adsbdb](https://www.adsbdb.com/)** for a genuinely free, keyless API for
   airline, route and aircraft lookups.
+- **[hexdb.io](https://hexdb.io/)** for the same, free and keyless, and for
+  knowing the light aircraft and bizjets nobody else does. Adding it as a second
+  source was an idea taken from
+  [biohead's fork](https://github.com/biohead/TheFlightWall_OSS) of
+  TheFlightWall_OSS.
 - **[Jxck-S/airline-logos](https://github.com/Jxck-S/airline-logos)** for
   collecting airline logo artwork by ICAO code.
 - **[catt](https://github.com/skorokithakis/catt)** and

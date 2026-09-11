@@ -125,6 +125,68 @@ def _parse_aircraft(body):
     }
 
 
+def _parse_hexdb_route(body):
+    """hexdb.io route: {"flight": "JBU211", "route": "EWR-RSW"}.
+
+    Only a two-airport route is usable. A multi-leg string like "ATL-DAB-ATL"
+    doesn't say which leg the aircraft is on, and guessing would put the wrong
+    airport on the board. There are no airport records either, only codes, so
+    a route from here has no names, no distance and no ETA.
+    """
+    parts = [p.strip().upper()
+             for p in (body.get("route") or "").split("-") if p.strip()]
+    if len(parts) != 2:
+        return None
+    return {
+        "origin": parts[0],
+        "destination": parts[1],
+        "airline": None,
+        "from": None,
+        "to": None,
+    }
+
+
+def _parse_hexdb_aircraft(body):
+    """hexdb.io aircraft record.
+
+    RegisteredOwners is the reason this source is worth asking at all: it is
+    frequently the only identity a general-aviation aircraft has, and those are
+    a quarter of the traffic over a city.
+    """
+    if not body.get("Registration") and not body.get("Type"):
+        return None
+    return {
+        "registration": body.get("Registration"),
+        "type": _ascii(body.get("Type")),
+        "manufacturer": _ascii(body.get("Manufacturer")),
+        "owner": _ascii(body.get("RegisteredOwners")),
+    }
+
+
+def _sources(kind, value):
+    """Where to look something up, in order, stopping at the first answer.
+
+    adsbdb first because it returns full airport records, which is what gives
+    the board place names, a progress bar and an ETA. hexdb second because it
+    knows aircraft adsbdb has never heard of - light aircraft and bizjets,
+    mostly - and answers with an owner where nothing else will.
+
+    A route stops at the first answer, since adsbdb's is strictly richer. An
+    aircraft record is *merged* across both: adsbdb has the better type and
+    manufacturer, but only hexdb carries the registered owner, so stopping
+    early would silently throw away the one field worth adding.
+    """
+    if kind == "route":
+        return (
+            (f"https://api.adsbdb.com/v0/callsign/{value}", _parse_route),
+            (f"https://hexdb.io/api/v1/route/iata/{value}", _parse_hexdb_route),
+        )
+    return (
+        (f"https://api.adsbdb.com/v0/aircraft/{value}", _parse_aircraft),
+        (f"https://hexdb.io/api/v1/aircraft/{value}", _parse_hexdb_aircraft),
+    )
+
+
 def _leg(route, lat, lon, gs):
     """Per-aircraft view of a cached route: progress, ETA and which end is home.
 
@@ -175,22 +237,29 @@ async def _enrich_worker():
             key = await _lookup_queue.get()
             _queued.discard(key)
             kind, value = key.split(":", 1)
-            url, parse = (
-                (f"https://api.adsbdb.com/v0/callsign/{value}", _parse_route)
-                if kind == "route"
-                else (f"https://api.adsbdb.com/v0/aircraft/{value}", _parse_aircraft)
-            )
             data = None
-            try:
-                r = await client.get(url, timeout=5)
-                if r.status_code == 200:
-                    data = parse(r.json())
-            except Exception as e:
-                log.debug("lookup failed for %s: %s", key, e)
+            for url, parse in _sources(kind, value):
+                got = None
+                try:
+                    r = await client.get(url, timeout=5)
+                    if r.status_code == 200:
+                        got = parse(r.json())
+                except Exception as e:
+                    log.debug("lookup failed for %s at %s: %s", key, url, e)
+                await asyncio.sleep(0.15)   # spaced out, and both are free services
+                if not got:
+                    continue
+                if data is None:
+                    data = got
+                else:
+                    for field, value_ in got.items():      # fill gaps only
+                        if value_ and not data.get(field):
+                            data[field] = value_
+                if kind == "route":
+                    break
             # negative results are cached too, so we don't re-ask every cycle
             _enrich_cache[key] = {"data": data, "ts": time.time()}
             _lookup_queue.task_done()
-            await asyncio.sleep(0.15)
 
 
 def _receiver_name(url):

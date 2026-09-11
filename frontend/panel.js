@@ -302,6 +302,14 @@ function flightTitle(airline, callsign, maxW) {
   return fitText(words[0], maxW - textW(tail)) + tail;
 }
 
+// Company suffixes on an owner's name. Deliberately not shortenAirline, which
+// strips a trailing "Air" or "Airways" and would render Korean Air as "Korean".
+function shortenOwner(name) {
+  return (name || '')
+    .replace(/,?\s+(Inc|L\.?L\.?C|Ltd|Co|Corp|Corporation|Holdings|Trust(ee)?)\.?$/i, '')
+    .trim();
+}
+
 function shortenAirline(name) {
   return name
     .replace(/\s+(Air Lines|Airlines|Airways|Airline|Aviation|Air)\b.*$/i, '')
@@ -345,6 +353,19 @@ function bottomPages(ac) {
     [['Alt:', C_TEXT], [fmtAlt(ac.alt_baro), C_VAL], [',Spd:', C_TEXT], [fmtSpd(ac.gs), C_VAL]],
     [['Trk:', C_TEXT], [fmtTrk(ac.track), C_VAL], [',Vr:', C_TEXT], [fmtVr(ac.baro_rate), C_VAL]],
   ]];
+
+  // Who owns it, which for a light aircraft or a bizjet is often the only
+  // identity there is: no airline, no route, just a registration until now.
+  // Skipped when the airline is known, because then it only repeats line 1 and
+  // spends a slot in the rotation saying "American" under "American 2723".
+  // Shorten only when it doesn't fit, the way airportLabel does. Trimming by
+  // default turns "Helicopters Inc" into a bare "Helicopters", which says less
+  // than the name it replaced.
+  const ownerRaw = ((ac.aircraft_info || {}).owner || '').trim();
+  const owner = textW(ownerRaw) <= W - M.padX * 2 ? ownerRaw : shortenOwner(ownerRaw);
+  if (owner && !(ac.route && ac.route.airline)) {
+    pages.push([['Operated by', C_TEXT], [owner, C_VAL]]);
+  }
 
   const r = ac.route;
   if (!r) return pages;
