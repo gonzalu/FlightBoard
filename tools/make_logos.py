@@ -124,13 +124,6 @@ CROPS = {
     # is far too detailed to reduce, the lettering beside it is not. Keeping
     # only the letters gives a mark that still reads at 28px.
     "NYPD": ("custom", (0.312, 0.28, 1.00, 0.71)),
-    # PlaneSense: the roundel on the left of their banner, without the wordmark
-    # beside it. Hand-copied into logo-sources/custom from the archive's
-    # fr24_banners, which is NOT in the default source list and should not be:
-    # it disagrees with avcodes_banners about who CNS is, and the whole-banner
-    # version is rejected as too sparse, so the chain silently substitutes
-    # Cobalt - a different airline entirely.
-    "CNS": ("custom", (0.000, 0.00, 0.160, 1.00)),
 }
 
 # Worth recording a thing that did NOT work, so nobody spends the afternoon on

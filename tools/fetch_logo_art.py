@@ -48,6 +48,11 @@ SOURCES = {
     # Flexjet, likewise: the original vector, cropped to the swoosh that closes
     # the wordmark. Wikimedia renders SVGs to PNG on request.
     "LXJ": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b3/Flexjet_Logo.svg/1920px-Flexjet_Logo.svg.png",
+    # PlaneSense. The archive only has them in a directory this project does not
+    # use, as a banner whose wordmark is rejected as too sparse - at which point
+    # the fallback chain reaches past them and lands on Cobalt, a different
+    # airline. Their own 180px icon is the roundel alone and needs no crop.
+    "CNS": "https://www.planesense.com/wp-content/uploads/2023/07/plane-sense-favicon.png",
 }
 
 UA = "FlightBoard/1.0 (+https://github.com/gonzalu/FlightBoard)"
