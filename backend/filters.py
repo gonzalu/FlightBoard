@@ -25,13 +25,14 @@ FILTERS_FILE = Path(
 )
 
 INFINITY = float("inf")
+DEFAULT_RANGE_NM = 40.0
 
 
 class Rules:
     """The parsed contents of filters.json. Empty means nothing is hidden."""
 
     __slots__ = ("hex", "airlines", "registrations", "types", "airports",
-                 "min_ft", "max_ft")
+                 "min_ft", "max_ft", "range_nm")
 
     def __init__(self, data=None):
         data = data or {}
@@ -48,6 +49,11 @@ class Rules:
         band = data.get("altitude_ft") or {}
         self.min_ft = _as_number(band.get("min"), 0.0)
         self.max_ft = _as_number(band.get("max"), INFINITY)
+        # Distance lives here rather than in flightboard.env because it is the
+        # same kind of setting as the altitude band - how much sky you want -
+        # and it is the one people adjust while watching, so it wants to be in
+        # the file that reloads itself.
+        self.range_nm = _as_number(data.get("range_nm"), DEFAULT_RANGE_NM)
 
     def active(self):
         """Human-readable summary of what is being hidden, or None."""
@@ -57,6 +63,8 @@ class Rules:
                               ("types", self.types), ("airports", self.airports)):
             if values:
                 parts.append(f"{label} {','.join(sorted(values))}")
+        if self.range_nm != DEFAULT_RANGE_NM:
+            parts.append(f"beyond {self.range_nm:g} nm")
         if self.min_ft > 0 or self.max_ft != INFINITY:
             hi = "any" if self.max_ft == INFINITY else f"{self.max_ft:g}"
             parts.append(f"altitude {self.min_ft:g}..{hi} ft")
@@ -147,4 +155,5 @@ if __name__ == "__main__":
         print("  INVALID: " + error())
         print("  Nothing is being hidden. Values must be quoted: [\"LGA\"], not [LGA].")
         sys.exit(1)
+    print(f"  range: {rules.range_nm:g} nm")
     print("  hiding: " + (rules.active() or "nothing"))

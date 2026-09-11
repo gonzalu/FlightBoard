@@ -25,6 +25,9 @@
     "airports": []
   },
 
+  "_range_nm": "How far out to look, in nautical miles. Lives here rather than in flightboard.env because it reloads live and is the one you actually adjust.",
+  "range_nm": 40,
+
   "_altitude_ft": "Feet. null means no limit. Aircraft on the ground read as 0, so a min of 1 drops them.",
   "altitude_ft": {
     "min": 0,

@@ -159,6 +159,9 @@ cp flightboard.env.example flightboard.env
 nano flightboard.env
 ```
 
+How far out to look isn't here: that's `range_nm` in `filters.json`, covered in
+[Hiding traffic you don't want](#hiding-traffic-you-dont-want).
+
 The three lines that matter, with the author's own as a worked example:
 
 ```
@@ -177,7 +180,7 @@ step. Anything already in the environment beats the file, which is what makes a
 one-off easy without editing anything:
 
 ```bash
-FLIGHTBOARD_MAX_RANGE_NM=80 .venv/bin/uvicorn backend.main:app
+FLIGHTBOARD_MAX_AIRCRAFT=200 .venv/bin/uvicorn backend.main:app
 ```
 
 **More than one receiver?** List them comma separated. They're all polled and
@@ -449,11 +452,15 @@ cp filters.example.json filters.json
     "types": ["CRJ"],
     "airports": ["LGA"]
   },
+  "range_nm": 40,
   "altitude_ft": { "min": 3000, "max": null }
 }
 ```
 
-Every section is optional and an empty list hides nothing.
+Every section is optional and an empty list hides nothing. **Range lives here
+too**, rather than in `flightboard.env`, because it answers the same question as
+the altitude band and it is the setting you actually adjust while watching, so
+it belongs in the file that re-reads itself.
 
 | Section | Matches |
 |---|---|
@@ -463,6 +470,7 @@ Every section is optional and an empty list hides nothing.
 | `types` | **substring**, so `CRJ` catches `CRJ 900`, `CRJ-900` and `CRJ 900 LR NG` alike |
 | `airports` | IATA code at *either* end of the route |
 | `altitude_ft` | `min` and `max` in feet; `null` for no limit |
+| `range_nm` | how far out to look, in nautical miles (default `40`) |
 
 Check an edit before wondering why nothing happened. JSON is unforgiving and
 every value has to be a quoted string, so `["LGA"]` and never `[LGA]`:
@@ -504,7 +512,7 @@ you *hide* is separate, and lives in `filters.json` — see
 | `FLIGHTBOARD_RECEIVERS` | *(see below)* | Comma-separated receiver JSON URLs. All are polled and merged. |
 | `FLIGHTBOARD_HOME_LAT` | `0.0` | Your latitude. **Set this.** |
 | `FLIGHTBOARD_HOME_LON` | `0.0` | Your longitude. **Set this.** |
-| `FLIGHTBOARD_MAX_RANGE_NM` | `40` | Ignore aircraft further away than this. |
+| *(range moved)* | | How far out to look is `range_nm` in `filters.json`, not a variable here. |
 | `FLIGHTBOARD_LOCAL_AIRPORT_NM` | `30` | An airport this close counts as "local", which turns a route into *Arriving from…* / *Departing to…* |
 | `FLIGHTBOARD_MAX_AIRCRAFT` | `60` | Cap on how many aircraft the API returns. |
 | `FLIGHTBOARD_POLL_INTERVAL` | `2` | Seconds between receiver polls. |
@@ -556,7 +564,7 @@ filtered out by distance.
 **The board says "No aircraft in range"**
 Your location is set, so this is genuine. Check
 `curl http://YOUR-SERVER:8090/api/aircraft`, confirm the coordinates are really
-yours and not transposed, and try widening `FLIGHTBOARD_MAX_RANGE_NM`.
+yours and not transposed, and try widening `range_nm` in `filters.json`.
 
 **A filter isn't taking effect**
 The file almost certainly didn't parse, in which case the last rules that *did*

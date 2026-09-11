@@ -229,15 +229,15 @@ def _entry(ac):
     lat, lon = ac.get("lat"), ac.get("lon")
     if lat is None or lon is None:
         return None
+    rules = filters.current()
     dist = haversine_nm(config.HOME_LAT, config.HOME_LON, lat, lon)
-    if dist > config.MAX_RANGE_NM:
+    if dist > rules.range_nm:
         return None
 
     flight = (ac.get("flight") or "").strip()
     alt_raw = ac.get("alt_baro")
     on_ground = alt_raw == "ground"
     altitude = 0 if on_ground else alt_raw
-    rules = filters.current()
     if _excluded(rules, ac.get("hex"), flight, altitude):
         return None
 
@@ -329,9 +329,13 @@ def _log_config():
     if config.CONFIG_SOURCE:
         log.info("settings from %s", config.CONFIG_SOURCE)
     log.info("home %.4f,%.4f, showing aircraft within %g nm",
-             config.HOME_LAT, config.HOME_LON, config.MAX_RANGE_NM)
+             config.HOME_LAT, config.HOME_LON, filters.current().range_nm)
     for url in config.RECEIVERS:
         log.info("receiver %s -> %s", _receiver_name(url), url)
+    for name in config.MOVED_TO_FILTERS:
+        log.warning("%s is no longer read: range lives in filters.json now, as "
+                    "\"range_nm\". Remove it from flightboard.env to stop this notice.",
+                    name)
     hidden = filters.current().active()
     log.info("hiding: %s", hidden) if hidden else log.info(
         "hiding nothing (%s)", filters.FILTERS_FILE)
@@ -341,7 +345,7 @@ def _log_config():
             "0,0 in the Atlantic. Every aircraft will measure further than %g nm "
             "away and the board will stay empty however healthy the receiver is. "
             "Copy flightboard.env.example to flightboard.env and set them there.",
-            config.MAX_RANGE_NM)
+            filters.current().range_nm)
 
 
 @asynccontextmanager
@@ -396,7 +400,7 @@ async def get_aircraft():
         # null unless filters.json failed to parse, in which case nothing is
         # being hidden and the reason belongs somewhere the operator will see it
         "filters_error": filters.error(),
-        "max_range_nm": config.MAX_RANGE_NM,
+        "max_range_nm": filters.current().range_nm,
         "build": _build_id(),
         "updated": _state["updated"],
         # seconds since the last good poll, computed server-side so the panel

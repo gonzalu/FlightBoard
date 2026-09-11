@@ -90,8 +90,13 @@ RECEIVERS = [
 HOME_LAT = float(_get("FLIGHTBOARD_HOME_LAT", "0.0"))
 HOME_LON = float(_get("FLIGHTBOARD_HOME_LON", "0.0"))
 
-# Only show aircraft within this radius (nautical miles).
-MAX_RANGE_NM = float(_get("FLIGHTBOARD_MAX_RANGE_NM", "40"))
+# Range moved to filters.json, alongside the altitude band, because both answer
+# the same question and that file reloads itself. This only exists to notice the
+# old setting still lying around and say where it went.
+MOVED_TO_FILTERS = [
+    name for name in ("FLIGHTBOARD_MAX_RANGE_NM",)
+    if name in os.environ or name in _from_file
+]
 
 
 # An airport this close to home counts as "local", which is what turns a route
