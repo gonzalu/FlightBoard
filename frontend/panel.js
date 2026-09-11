@@ -457,7 +457,11 @@ function buildFlightFrame(ac, page) {
 
   const airline = (ac.route && ac.route.airline) || '';
   const info = ac.aircraft_info || {};
-  const callsign = ac.flight || ac.hex.toUpperCase();
+  // Plenty of aircraft transmit a position and no ident at all - bizjets and
+  // police helicopters especially, but airliners do it too. The registration is
+  // the identity worth reading, and the lookups nearly always have one, so fall
+  // back to the raw hex only when even that is unknown.
+  const callsign = ac.flight || info.registration || ac.hex.toUpperCase();
 
   if (M.logo) {
     // Deliberately ac.flight, not callsign: callsign falls back to the hex when
