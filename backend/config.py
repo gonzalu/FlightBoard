@@ -123,4 +123,9 @@ ENRICH_TTL = float(_get("FLIGHTBOARD_ENRICH_TTL", "3600"))
 # aircraft blank all afternoon when the answer was there all along.
 ENRICH_FAIL_TTL = float(_get("FLIGHTBOARD_ENRICH_FAIL_TTL", "300"))
 
+# Show the diagnostic bands above and below the panel by default. Any display
+# can override it per URL with ?debug=1 or ?debug=0, which is usually what you
+# want: debug the board on a laptop while the cast TV stays clean.
+DEBUG = _get("FLIGHTBOARD_DEBUG", "0") == "1"
+
 PORT = int(_get("FLIGHTBOARD_PORT", "8090"))

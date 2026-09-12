@@ -43,7 +43,10 @@ const CFG = {
   STALE_AFTER_S: 90,  // how long to keep showing the last good data if the feed drops
 };
 
-const M = MODELS[new URLSearchParams(location.search).get('model')] || MODELS.mini;
+const QS = new URLSearchParams(location.search);
+const M = MODELS[QS.get('model')] || MODELS.mini;
+const debugParam = QS.get('debug');   // null means "whatever the backend says"
+let debugSettled = false;
 const W = M.W, H = M.H;
 
 const C_TEXT = 0xeaf4ff;
@@ -200,17 +203,24 @@ function drawWordmark(box, text, color) {
 }
 
 // A wordmark if one is listed, else the generated logo, else a tail fin.
+// What drawLogo last did, for the debug overlay. Reported rather than
+// re-derived: a second copy of this decision would drift and then mislead.
+let lastLogo = {};
+
 function drawLogo(box, key, base, accent) {
   const words = wordmarkFor(key);
   if (words) {
+    lastLogo.how = 'wordmark';
     drawWordmark(box, words, accent);
     return;
   }
   const logo = typeof LOGOS !== 'undefined' && key ? LOGOS[key] : null;
   if (!logo) {
+    lastLogo.how = 'tail fin (no mark held)';
     drawFin(box, base, accent);
     return;
   }
+  lastLogo.how = 'pixel mark';
   const s = LOGO_SIZE;
   const ox = box.x + ((box.size - s) >> 1);
   const oy = box.y + ((box.size - s) >> 1);
@@ -452,6 +462,7 @@ function drawProgress(fraction) {
 }
 
 function buildFlightFrame(ac, page) {
+  lastLogo = {};          // a model with no logo box must not report the last one's
   clear();
   if (M.border) drawRect(0, 0, W, H, C_TEXT);
 
@@ -468,7 +479,20 @@ function buildFlightFrame(ac, page) {
     // an aircraft transmits no ident, and a hex looks exactly like a callsign to
     // airlineKey - "ACB1F5" reads as the airline "ACB". Those are the aircraft
     // that most need the operator lookup, so mis-keying them is the worst case.
-    const key = airlineKey(ac.flight || '') || operatorKey(info);
+    const fromCallsign = airlineKey(ac.flight || '');
+    const key = fromCallsign || operatorKey(info);
+    const rawPrefix = (/^([A-Z]{3})\d/.exec((ac.flight || '').trim()) || [])[1];
+    lastLogo = {
+      key,
+      how: null,                                   // filled in by drawLogo
+      alias: fromCallsign && rawPrefix !== key ? rawPrefix : null,
+      via: fromCallsign ? 'callsign prefix'
+         : !key ? null
+         : (info.operator_code && key ===
+             ((typeof LOGO_ALIASES !== 'undefined' && LOGO_ALIASES[info.operator_code])
+              || info.operator_code)) ? 'operator code'
+         : 'owner name',
+    };
     // With no airline, hash the registered owner rather than falling back to
     // one grey for everybody. A quarter of the traffic over a city is general
     // aviation, and every last aircraft of it drew the same tile: an NYPD
@@ -515,6 +539,7 @@ function buildFlightFrame(ac, page) {
 }
 
 function buildMessageFrame(lines) {
+  lastLogo = {};
   clear();
   if (M.border) drawRect(0, 0, W, H, C_TEXT);
   const pitch = CHAR_H + 2;
@@ -525,9 +550,14 @@ function buildMessageFrame(lines) {
 /* ---------- LED rendering ---------- */
 
 function layoutCanvas() {
+  // measure the stage, not the window: with the debug bands mounted the panel
+  // has less height to work with, and it should shrink rather than overflow
+  const stage = document.getElementById('stage');
+  const availW = stage.clientWidth || window.innerWidth;
+  const availH = stage.clientHeight || window.innerHeight;
   pitch = Math.max(2, Math.floor(Math.min(
-    (window.innerWidth * 0.94) / W,
-    (window.innerHeight * 0.90) / H,
+    (availW * 0.94) / W,
+    (availH * 0.90) / H,
   )));
   cvs.width = W * pitch;
   cvs.height = H * pitch;
@@ -627,10 +657,20 @@ function advance() {
   page = 0;
 }
 
+let lastData = null;
+
 async function poll() {
   try {
-    const res = await fetch('/api/aircraft');
+    const res = await fetch('/api/aircraft' + (Debug.on ? '?debug=1' : ''));
     const data = await res.json();
+    lastData = data;
+
+    // The URL wins if it says anything, so one display can be debugged while
+    // the cast TV stays clean. Otherwise take the backend's configured default.
+    if (debugParam === null && data.debug_default != null && !debugSettled) {
+      debugSettled = true;
+      Debug.set(data.debug_default);
+    }
 
     // A cast page never reloads by itself: the Chromecast loads this URL once
     // and renders it for months, so a deploy would otherwise never reach the
@@ -692,6 +732,12 @@ function paint() {
   else if (!ac) buildMessageFrame(['No aircraft', 'in range']);
   else buildFlightFrame(ac, page);
   render();
+  // after the frame, never before: lastLogo is written by drawLogo, so reading
+  // it first reports the previous aircraft's logo under this one's callsign
+  if (Debug.on) {
+    const pageCount = ac && M.bottom ? bottomPages(ac).length : 1;
+    Debug.update(lastData, ac, {page, pageCount, shown: flights.length, logo: lastLogo});
+  }
 }
 
 async function start() {
@@ -703,4 +749,16 @@ async function start() {
 }
 
 window.addEventListener('resize', layoutCanvas);
+
+// d toggles the overlay, c copies it. Both matter on a wall display: the
+// interesting aircraft is usually gone by the time you have found a keyboard,
+// and reading a fault back over the phone is worse than pasting it.
+document.addEventListener('keydown', e => {
+  if (e.key === 'd') { Debug.set(!Debug.on); paint(); poll(); }
+  if (e.key === 'c' && Debug.on && navigator.clipboard) {
+    navigator.clipboard.writeText(Debug.text());
+  }
+});
+
+if (debugParam !== null) Debug.set(debugParam !== '0');
 start();

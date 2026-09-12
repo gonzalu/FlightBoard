@@ -606,6 +606,8 @@ you *hide* is separate, and lives in `filters.json` — see
 | `FLIGHTBOARD_POLL_INTERVAL` | `2` | Seconds between receiver polls. |
 | `FLIGHTBOARD_ENABLE_ENRICH` | `1` | Set `0` to disable adsbdb and hexdb lookups and run fully offline. |
 | `FLIGHTBOARD_ENRICH_TTL` | `3600` | Seconds to cache an airline/route/type lookup. |
+| `FLIGHTBOARD_ENRICH_FAIL_TTL` | `300` | Seconds to cache a lookup that found *nothing*. Shorter on purpose: a hit is a fact about an aircraft, a miss is often just a service having a bad minute. |
+| `FLIGHTBOARD_DEBUG` | `0` | `1` shows the diagnostic bands on every display. Any single display can override it with `?debug=1` or `?debug=0` — see [Debug mode](#debug-mode). |
 | `FLIGHTBOARD_PORT` | `8090` | Port. |
 
 Display behaviour lives in `CFG` at the top of `frontend/panel.js`: `PAGE_MS`
@@ -664,6 +666,51 @@ bit per LED into a framebuffer, which is then drawn as physical dots with the
 unlit LEDs still visible between them. At 6 px per character a 128 px panel fits
 21 characters, and that constraint is why the readouts are written the way they
 are.
+
+---
+
+## Debug mode
+
+The panel is 128×64 dots. That is a lovely thing to look at and a hopeless place
+to answer *why does it say that?*, so debug mode puts the answer in plain text
+above and below it, outside the LEDs.
+
+Add `?debug=1` to the URL, or press **d**. Press **c** to copy the whole thing
+to the clipboard, which is the fastest way to hand someone a fault.
+
+```
+build a1b2c3  poll 1s ago   home 40.8834,-73.9103   range 40nm   rotating 10 of 25 in range
+receivers   pi60 FAILED Client error '404 Not Found' for url '…'   |   pi22 ok 21
+enrich on   cache 143 (118 hit / 25 miss)   queued 0   ttl 3600s hit / 300s miss
+local db    routes 620255 · aircraft 16873 · airports 34115 · airlines 5904 · countries 811
+settings    /home/pi/FlightBoard/flightboard.env
+```
+
+The top band is the whole system: which receivers answered, how stale the data
+is, what the caches hold, whether the local database was ever built. The bottom
+band is the aircraft currently on screen, field by field, each tagged with the
+source that supplied it:
+
+```
+AA8548   ident "N777ZA"   via pi22   11.7nm brg 206deg   alt 1300ft   gs 113kt   page 1/2
+airframe    hit          41s old   asked vrs, adsbdb, hexdb
+            registration N777ZA (vrs)   type 407 GX (vrs)   manufacturer Bell (adsbdb)
+            owner Zip Aviation (adsbdb)   operator_code B407 (hexdb)
+route       cold
+logo        no key   drew tail fin (no mark held)   (operator code B407 names no mark we
+            hold - hexdb often puts the aircraft type there, and "Zip Aviation" is not in
+            OPERATOR_LOGOS)
+```
+
+That last line is the one worth having. *Why did this aircraft get a plain tail
+fin?* is otherwise a bisect through three lookup services, two alias tables and
+a generated logo file, and here it is a sentence.
+
+Two things are deliberate. The URL parameter beats the configured default, so a
+laptop can run in debug while the cast TV stays clean. And nothing in the bands
+is recomputed for display: the logo line is reported by the code that drew the
+logo, because a second implementation of that decision would drift from the
+first one and then quietly lie to you.
 
 ---
 

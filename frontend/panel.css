@@ -19,3 +19,33 @@ html, body {
   border-radius: 4px;
   box-shadow: 0 0 0 6px #0a0a0a, 0 0 0 7px #1c1c1c, 0 18px 60px rgba(0, 0, 0, 0.9);
 }
+
+/* ---------- debug overlay (off unless ?debug=1, d, or FLIGHTBOARD_DEBUG) ---------- */
+
+body.debug {
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+/* the panel gives up whatever height the bands need, rather than overflowing */
+body.debug #stage {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.dbg {
+  margin: 0;
+  padding: 7px 12px;
+  /* small enough to be dense, and it scales up on a TV viewed from a sofa */
+  font: clamp(10px, 0.85vw, 15px)/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #86d9ef;
+  background: #05080a;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;              /* the whole point is to be able to paste it */
+  flex: 0 0 auto;
+}
+
+.dbg:first-child { border-bottom: 1px solid #16242b; }
+.dbg:last-child  { border-top: 1px solid #16242b; }

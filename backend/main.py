@@ -73,6 +73,26 @@ def _enrichment(key):
     return hit["data"]
 
 
+def _enrich_meta(key):
+    """What the cache knows about a lookup, for debug mode. Never enqueues.
+
+    Deliberately separate from _enrichment: asking a diagnostic question must
+    not schedule work or extend a TTL, or the display would be measuring its
+    own observer.
+    """
+    hit = _enrich_cache.get(key)
+    if hit is None:
+        return {"state": "queued" if key in _queued else "cold"}
+    age = time.time() - hit["ts"]
+    ttl = config.ENRICH_TTL if hit["data"] else config.ENRICH_FAIL_TTL
+    return {
+        "state": ("hit" if hit["data"] else "miss") + ("" if age < ttl else ", stale"),
+        "age_s": round(age),
+        "src": hit.get("src") or {},
+        "asked": hit.get("asked") or [],
+    }
+
+
 def _ascii(s):
     """The panel's bitmap font is ASCII only, so fold accents and dashes."""
     if not s:
@@ -253,12 +273,12 @@ def _sources(kind, value):
     """
     if kind == "route":
         return (
-            (f"https://api.adsbdb.com/v0/callsign/{value}", _parse_route),
-            (f"https://hexdb.io/api/v1/route/iata/{value}", _parse_hexdb_route),
+            ("adsbdb", f"https://api.adsbdb.com/v0/callsign/{value}", _parse_route),
+            ("hexdb", f"https://hexdb.io/api/v1/route/iata/{value}", _parse_hexdb_route),
         )
     return (
-        (f"https://api.adsbdb.com/v0/aircraft/{value}", _parse_aircraft),
-        (f"https://hexdb.io/api/v1/aircraft/{value}", _parse_hexdb_aircraft),
+        ("adsbdb", f"https://api.adsbdb.com/v0/aircraft/{value}", _parse_aircraft),
+        ("hexdb", f"https://hexdb.io/api/v1/aircraft/{value}", _parse_hexdb_aircraft),
     )
 
 
@@ -279,15 +299,24 @@ def _route_fits(leg, lat, lon):
     via the aircraft against the direct route catches that: 1.00 to 1.06 for
     every genuine route measured, 1.51 and up for every wrong one.
     """
+    m = _route_detour(leg, lat, lon)
+    if m is None:
+        return True                      # no coordinates, nothing to check
+    via, direct = m
+    return via - direct <= ROUTE_DETOUR_NM or via / direct <= ROUTE_DETOUR_RATIO
+
+
+def _route_detour(leg, lat, lon):
+    """(distance via the aircraft, direct distance) in nm, or None."""
     a, b = leg.get("from"), leg.get("to")
     if not a or not b or a.get("lat") is None or b.get("lat") is None:
-        return True                      # no coordinates, nothing to check
+        return None
     direct = haversine_nm(a["lat"], a["lon"], b["lat"], b["lon"])
     if direct < 1:
-        return True
+        return None
     via = (haversine_nm(lat, lon, a["lat"], a["lon"])
            + haversine_nm(lat, lon, b["lat"], b["lon"]))
-    return via - direct <= ROUTE_DETOUR_NM or via / direct <= ROUTE_DETOUR_RATIO
+    return via, direct
 
 
 # Feet per minute past which an aircraft is unambiguously going somewhere.
@@ -360,9 +389,15 @@ async def _enrich_worker():
             # sources below, since each holds fields the others lack.
             local = _vrs_route(value) if kind == "route" else _vrs_aircraft(value)
             data = local
+            # Which source each field came from. Nothing here changes what the
+            # board shows; it is what lets debug mode answer "why does it say
+            # that?" without a bisect through three APIs by hand.
+            src = {f: "vrs" for f, v in (local or {}).items() if v}
+            asked = ["vrs"] if local is not None else []
             enough = local is not None and kind == "route"
-            for url, parse in (() if enough else _sources(kind, value)):
+            for name, url, parse in (() if enough else _sources(kind, value)):
                 got = None
+                asked.append(name)
                 try:
                     r = await client.get(url, timeout=5)
                     if r.status_code == 200:
@@ -374,14 +409,17 @@ async def _enrich_worker():
                     continue
                 if data is None:
                     data = got
+                    src = {f: name for f, v in got.items() if v}
                 else:
                     for field, value_ in got.items():      # fill gaps only
                         if value_ and not data.get(field):
                             data[field] = value_
+                            src[field] = name
                 if kind == "route":
                     break
             # negative results are cached too, so we don't re-ask every cycle
-            _enrich_cache[key] = {"data": data, "ts": time.time()}
+            _enrich_cache[key] = {"data": data, "src": src, "asked": asked,
+                                  "ts": time.time()}
             _lookup_queue.task_done()
 
 
@@ -471,8 +509,11 @@ def _entry(ac):
         "distance_nm": round(dist, 1),
         "bearing_deg": round(bearing_deg(config.HOME_LAT, config.HOME_LON, lat, lon)),
     }
+    dbg = {"route": None, "type": None, "detour": None, "guard": None}
+    entry["_debug"] = dbg
     if config.ENABLE_ENRICH:
         if flight:
+            dbg["route"] = _enrich_meta(f"route:{flight}")
             route = _enrichment(f"route:{flight}")
             if route:
                 route = _current_leg(route, lat, lon)
@@ -486,14 +527,23 @@ def _entry(ac):
                 # the callsign prefix and is still right, so keep it: throwing
                 # the whole record away cost line 1 its name and turned
                 # "Southwest 1304" back into "SWA1304".
+                m = _route_detour(leg, lat, lon)
+                if m:
+                    dbg["detour"] = {"via_nm": round(m[0]), "direct_nm": round(m[1]),
+                                     "ratio": round(m[0] / m[1], 2)}
                 if _route_fits(route, lat, lon):
+                    dbg["guard"] = "kept"
                     entry["route"] = leg
                 elif leg.get("airline"):
+                    dbg["guard"] = "airports dropped, airline kept"
                     entry["route"] = {"airline": leg["airline"], "origin": None,
                                       "destination": None, "from": None, "to": None}
                     log.debug("dropped airports for %s (%s-%s), kept the airline",
                               flight, route.get("origin"), route.get("destination"))
+                else:
+                    dbg["guard"] = "route dropped"
         if entry["hex"]:
+            dbg["type"] = _enrich_meta(f"type:{entry['hex']}")
             info = _enrichment(f"type:{entry['hex']}")
             if info:
                 reg = (info.get("registration") or "").upper()
@@ -622,8 +672,29 @@ def _build_id():
     return digest[:12]
 
 
+def _debug_state():
+    """Whole-system state for debug mode: the things an empty or wrong board
+    is almost always down to, gathered where they can be read at a glance."""
+    hits = sum(1 for v in _enrich_cache.values() if v["data"])
+    return {
+        "settings_from": config.CONFIG_SOURCE or "environment and defaults",
+        "enrich_enabled": config.ENABLE_ENRICH,
+        "enrich_ttl_s": config.ENRICH_TTL,
+        "enrich_fail_ttl_s": config.ENRICH_FAIL_TTL,
+        "cache": {"entries": len(_enrich_cache), "hits": hits,
+                  "misses": len(_enrich_cache) - hits, "queued": len(_queued)},
+        "local_db": routes_db.stats(),
+        "poll_interval_s": config.POLL_INTERVAL,
+        "max_aircraft": config.MAX_AIRCRAFT,
+    }
+
+
 @app.get("/api/aircraft")
-async def get_aircraft():
+async def get_aircraft(debug: int = 0):
+    aircraft = _state["aircraft"]
+    if not debug:
+        # the normal payload stays lean; a Chromecast pulls this every 2 s
+        aircraft = [{k: v for k, v in a.items() if k != "_debug"} for a in aircraft]
     return {
         "home": {"lat": config.HOME_LAT, "lon": config.HOME_LON},
         # null unless filters.json failed to parse, in which case nothing is
@@ -631,13 +702,16 @@ async def get_aircraft():
         "filters_error": filters.error(),
         "max_range_nm": filters.current().range_nm,
         "build": _build_id(),
+        # the panel reads this only when its URL says nothing about debug
+        "debug_default": config.DEBUG,
         "updated": _state["updated"],
         # seconds since the last good poll, computed server-side so the panel
         # doesn't have to trust that its clock agrees with this host's
         "age_s": round(time.time() - _state["updated"], 1) if _state["updated"] else None,
         "last_error": _state["last_error"],
         "sources": _state["sources"],
-        "aircraft": _state["aircraft"],
+        "debug": _debug_state() if debug else None,
+        "aircraft": aircraft,
     }
 
 

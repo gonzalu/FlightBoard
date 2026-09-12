@@ -130,3 +130,18 @@ def country(hexid):
         return row[0] if row else None
     except Exception:
         return None
+
+
+def stats():
+    """Row counts per table, for debug mode. Missing tables simply go unlisted,
+    which is itself the answer when a database predates them."""
+    db = _db()
+    if not db:
+        return {"present": False, "path": str(DB_FILE)}
+    out = {"present": True, "path": str(DB_FILE)}
+    for t in ("routes", "airports", "airlines", "aircraft", "code_blocks"):
+        try:
+            out[t] = db.execute(f"SELECT count(*) FROM {t}").fetchone()[0]
+        except Exception:
+            pass
+    return out
