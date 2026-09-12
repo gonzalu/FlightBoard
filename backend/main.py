@@ -191,6 +191,34 @@ def _sources(kind, value):
     )
 
 
+# A route lookup is a static callsign-to-route mapping, not a live flight plan,
+# and airlines reuse flight numbers. Measured on live traffic, a genuine route
+# puts the aircraft within a few percent of the direct line between its two
+# airports; a wrong one leaves it hundreds or thousands of miles off. Both
+# thresholds must be exceeded before a route is thrown away.
+ROUTE_DETOUR_RATIO = 1.25
+ROUTE_DETOUR_NM = 100.0
+
+
+def _route_fits(leg, lat, lon):
+    """Whether this aircraft can plausibly be flying this route.
+
+    SWA1304 is San Francisco to Los Angeles in the database, and was also, one
+    afternoon, something at 25 ft over New York. Comparing the distance flown
+    via the aircraft against the direct route catches that: 1.00 to 1.06 for
+    every genuine route measured, 1.51 and up for every wrong one.
+    """
+    a, b = leg.get("from"), leg.get("to")
+    if not a or not b or a.get("lat") is None or b.get("lat") is None:
+        return True                      # no coordinates, nothing to check
+    direct = haversine_nm(a["lat"], a["lon"], b["lat"], b["lon"])
+    if direct < 1:
+        return True
+    via = (haversine_nm(lat, lon, a["lat"], a["lon"])
+           + haversine_nm(lat, lon, b["lat"], b["lon"]))
+    return via - direct <= ROUTE_DETOUR_NM or via / direct <= ROUTE_DETOUR_RATIO
+
+
 def _leg(route, lat, lon, gs):
     """Per-aircraft view of a cached route: progress, ETA and which end is home.
 
@@ -359,7 +387,13 @@ def _entry(ac):
                 leg = _leg(route, lat, lon, entry["gs"])
                 if rules.hides_route(leg):
                     return None
-                entry["route"] = leg
+                # A route the aircraft cannot be on is worse than no route: it
+                # is a confident, specific, wrong answer on the display.
+                if _route_fits(route, lat, lon):
+                    entry["route"] = leg
+                else:
+                    log.debug("dropping implausible route for %s: %s-%s",
+                              flight, route.get("origin"), route.get("destination"))
         if entry["hex"]:
             info = _enrichment(f"type:{entry['hex']}")
             if info:
