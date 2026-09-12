@@ -117,4 +117,10 @@ POLL_INTERVAL = float(_get("FLIGHTBOARD_POLL_INTERVAL", "2"))
 ENABLE_ENRICH = _get("FLIGHTBOARD_ENABLE_ENRICH", "1") == "1"
 ENRICH_TTL = float(_get("FLIGHTBOARD_ENRICH_TTL", "3600"))
 
+# A lookup that found nothing is retried far sooner than one that succeeded. A
+# hit is a fact about an aircraft and keeps for an hour; a miss might only mean
+# the service was briefly unreachable, and caching that for an hour leaves an
+# aircraft blank all afternoon when the answer was there all along.
+ENRICH_FAIL_TTL = float(_get("FLIGHTBOARD_ENRICH_FAIL_TTL", "300"))
+
 PORT = int(_get("FLIGHTBOARD_PORT", "8090"))

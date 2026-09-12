@@ -383,14 +383,15 @@ FlightAware on four flights the free API got all four wrong and this got three
 right. It also knows aircraft the APIs have never heard of.
 
 ```bash
-python3 tools/fetch_routes.py
+python3 tools/fetch_standing_data.py
 ```
 
-That builds `data/standing-data.sqlite`, about 30 MB, holding 620,000 routes,
-34,000 airports and 5,900 airlines. Every lookup is then local: **no network
-call, no rate limit, no key**, and the board keeps naming routes when the
-internet is down and your receivers are not. It is SQLite rather than a table in
-memory so that a Pi 3 can hold it.
+That builds `data/standing-data.sqlite`, about 30 MB in a couple of seconds,
+holding 620,000 routes, 34,000 airports, 5,900 airlines, 17,000 airframes and
+the ICAO address blocks that say which country an aircraft is registered in.
+Every lookup is then local: **no network call, no rate limit, no key**, and the
+board keeps naming flights when the internet is down and your receivers are
+not. It is SQLite rather than a table in memory so that a Pi 3 can hold it.
 
 The data is CC0. Re-run the tool whenever you like; the upstream mirror
 refreshes hourly, though routes change slowly enough that weekly is plenty.
@@ -474,7 +475,7 @@ What actually needs what:
 | `flightboard.env` | a restart; settings are read once, at startup |
 | `flightboard-backend.service` | `sudo systemctl daemon-reload`, then a restart |
 | `tools/make_logos.py`, `tools/fetch_logo_art.py` | regenerate the logos — see below |
-| `tools/fetch_routes.py` | rebuild the route database with `python3 tools/fetch_routes.py` |
+| `tools/fetch_standing_data.py` | rebuild the local database: `python3 tools/fetch_standing_data.py` |
 
 **`frontend/logos.js` does not arrive with a `git pull`.** It is generated from
 artwork you fetch locally and is gitignored, so when the generator changes your
@@ -505,12 +506,12 @@ changes. New files count as well as changed ones, so a Chromecast picks up a
 release that adds a script without being re-cast. The fingerprint is computed
 per request, which is why a frontend change needs no restart.
 
-**The route database is not in the repository either**, for the same reason as
-the logos: it is generated and large. A clone has the tool but no database, and
-falls back to the online lookups until you run it:
+**The standing-data database is not in the repository either**, for the same
+reason as the logos: it is generated and large. A clone has the tool but no
+database, and falls back to the online lookups until you run it:
 
 ```bash
-python3 tools/fetch_routes.py
+python3 tools/fetch_standing_data.py
 ```
 
 To watch the backend the way you would a foreground `uvicorn`:
@@ -633,8 +634,13 @@ lookups run in a **background worker**, never inside the poll loop, so a burst
 of unknown aircraft can't stall the position feed. Results are cached, including
 negative ones, and served stale while they refresh.
 
-Routes are looked up locally first, in the Virtual Radar Server standing data
-if you have built it, and only then online. A multi-stop route is resolved to
+Routes and airframes are looked up locally first, in the Virtual Radar Server
+standing data if you have built it, and only then online. The two are treated
+differently: a route the local database knows is taken as final, while an
+airframe is merged with whatever the online sources add, because none of the
+three is a superset of the others. The local copy is the only one that knew a
+JetBlue A220 and an American A321XLR delivered this year; adsbdb was the only
+one that knew a 1998 Delta 767 that has been flying the whole time. A multi-stop route is resolved to
 the leg the aircraft is actually flying by picking the pair of airports it sits
 most nearly between, which is how a Seoul-Anchorage-JFK-Brussels cargo run shows
 the right half of itself.

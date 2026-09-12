@@ -1,6 +1,6 @@
-"""Route lookups from the local Virtual Radar Server standing-data database.
+"""Local lookups against the Virtual Radar Server standing-data database.
 
-Built by tools/fetch_routes.py. Queried per callsign with no network call at
+Built by tools/fetch_standing_data.py. Queried with no network call at
 all, which is the point: it is faster than any API, it cannot rate-limit, and
 the board keeps naming routes when the internet is down and the receivers are
 not.
@@ -85,4 +85,48 @@ def lookup(callsign):
         return {"codes": codes, "airports": airports, "airline": airline}
     except Exception as e:
         log.debug("route lookup failed for %s: %s", callsign, e)
+        return None
+
+
+def aircraft(hexid):
+    """Airframe record for an ICAO address, or None.
+
+    Worth asking before the online sources: this table is contributed by people
+    who watch aircraft, so it carries recent deliveries the registry-driven APIs
+    have not caught up with yet.
+    """
+    db = _db()
+    if not db or not hexid:
+        return None
+    try:
+        row = db.execute(
+            "SELECT registration, model, manufacturer, operator, airline_code, "
+            "year_built FROM aircraft WHERE icao = ?", (hexid.strip().upper(),)
+        ).fetchone()
+    except Exception as e:
+        log.debug("aircraft lookup failed for %s: %s", hexid, e)
+        return None
+    if not row:
+        return None
+    keys = ("registration", "model", "manufacturer", "operator", "airline_code",
+            "year_built")
+    return {k: (v or None) for k, v in zip(keys, row)}
+
+
+def country(hexid):
+    """ISO-3166 alpha-2 of the country that allocated this ICAO address.
+
+    ICAO hands out address blocks by country, so this needs no lookup service
+    and works for every aircraft that transmits at all.
+    """
+    db = _db()
+    if not db or not hexid:
+        return None
+    try:
+        v = int(hexid, 16)
+        row = db.execute(
+            "SELECT country FROM code_blocks WHERE start <= ? AND finish >= ? "
+            "ORDER BY finish - start LIMIT 1", (v, v)).fetchone()
+        return row[0] if row else None
+    except Exception:
         return None

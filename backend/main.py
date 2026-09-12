@@ -67,7 +67,8 @@ def _enrichment(key):
     if hit is None:
         _enqueue(key)
         return None
-    if time.time() - hit["ts"] >= config.ENRICH_TTL:
+    ttl = config.ENRICH_TTL if hit["data"] else config.ENRICH_FAIL_TTL
+    if time.time() - hit["ts"] >= ttl:
         _enqueue(key)
     return hit["data"]
 
@@ -222,6 +223,21 @@ def _current_leg(route, lat, lon):
             "airline": route.get("airline"), "from": a, "to": b}
 
 
+def _vrs_aircraft(hexid):
+    """An airframe from the local database, shaped like the online answers."""
+    raw = routes_db.aircraft(hexid)
+    if not raw:
+        return None
+    model, maker = raw.get("model"), raw.get("manufacturer")
+    return {
+        "registration": raw.get("registration"),
+        "type": _ascii(model),
+        "manufacturer": _ascii(maker),
+        "owner": _ascii(raw.get("operator")),
+        "operator_code": raw.get("airline_code"),
+    }
+
+
 def _sources(kind, value):
     """Where to look something up, in order, stopping at the first answer.
 
@@ -338,10 +354,14 @@ async def _enrich_worker():
             key = await _lookup_queue.get()
             _queued.discard(key)
             kind, value = key.split(":", 1)
-            # The local database first, for routes: no network call, better
-            # curated, and it answers when nothing else is reachable.
-            data = _vrs_route(value) if kind == "route" else None
-            for url, parse in (() if data else _sources(kind, value)):
+            # The local database first: no network call, better curated, and
+            # it answers when nothing else is reachable. A route it knows is
+            # good enough on its own; an airframe is merged with the online
+            # sources below, since each holds fields the others lack.
+            local = _vrs_route(value) if kind == "route" else _vrs_aircraft(value)
+            data = local
+            enough = local is not None and kind == "route"
+            for url, parse in (() if enough else _sources(kind, value)):
                 got = None
                 try:
                     r = await client.get(url, timeout=5)
