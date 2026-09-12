@@ -37,6 +37,7 @@ uses, and every dot you see is an individually addressed LED.
     + [4. Try it](#4-try-it)
     + [5. Run it at boot](#5-run-it-at-boot)
   * [Airline logos (optional)](#airline-logos-optional)
+  * [Better routes (optional)](#better-routes-optional)
   * [Getting it onto a TV](#getting-it-onto-a-tv)
     + [Option A — Chromecast](#option-a--chromecast)
     + [Option B — Raspberry Pi on HDMI](#option-b--raspberry-pi-on-hdmi)
@@ -368,6 +369,43 @@ the tables above need.
 
 ---
 
+## Better routes (optional)
+
+Out of the box, routes come from [adsbdb](https://www.adsbdb.com/) and
+[hexdb.io](https://hexdb.io/). Both are free and keyless, and both are static
+callsign-to-route mappings with no notion of today. Airlines reuse flight
+numbers, so a fair number of them are simply for a different flight: measured
+against live traffic here, between one in seven and one in three were wrong.
+
+Virtual Radar Server publishes a community-curated version of the same thing,
+corrected continuously by the people running receivers. Checked against
+FlightAware on four flights the free API got all four wrong and this got three
+right. It also knows aircraft the APIs have never heard of.
+
+```bash
+python3 tools/fetch_routes.py
+```
+
+That builds `data/standing-data.sqlite`, about 30 MB, holding 620,000 routes,
+34,000 airports and 5,900 airlines. Every lookup is then local: **no network
+call, no rate limit, no key**, and the board keeps naming routes when the
+internet is down and your receivers are not. It is SQLite rather than a table in
+memory so that a Pi 3 can hold it.
+
+The data is CC0. Re-run the tool whenever you like; the upstream mirror
+refreshes hourly, though routes change slowly enough that weekly is plenty.
+
+**If the board shows a route you know is wrong**, fix it for everybody at
+[the SDM site](https://sdm.virtualradarserver.co.uk/Edit). That is what makes
+this database better than the alternatives, and it only stays that way because
+people correct it.
+
+Sources are tried local first, then adsbdb, then hexdb, and whatever comes back
+still has to pass the plausibility check described in *How it works* - none of
+them know what day it is.
+
+---
+
 ## Getting it onto a TV
 
 ### Option A — Chromecast
@@ -436,6 +474,7 @@ What actually needs what:
 | `flightboard.env` | a restart; settings are read once, at startup |
 | `flightboard-backend.service` | `sudo systemctl daemon-reload`, then a restart |
 | `tools/make_logos.py`, `tools/fetch_logo_art.py` | regenerate the logos — see below |
+| `tools/fetch_routes.py` | rebuild the route database with `python3 tools/fetch_routes.py` |
 
 **`frontend/logos.js` does not arrive with a `git pull`.** It is generated from
 artwork you fetch locally and is gitignored, so when the generator changes your
@@ -465,6 +504,14 @@ fingerprint of the whole `frontend/` directory and the panel reloads when it
 changes. New files count as well as changed ones, so a Chromecast picks up a
 release that adds a script without being re-cast. The fingerprint is computed
 per request, which is why a frontend change needs no restart.
+
+**The route database is not in the repository either**, for the same reason as
+the logos: it is generated and large. A clone has the tool but no database, and
+falls back to the online lookups until you run it:
+
+```bash
+python3 tools/fetch_routes.py
+```
 
 To watch the backend the way you would a foreground `uvicorn`:
 
@@ -571,6 +618,7 @@ through), `SKIP_GROUND` (whether to include aircraft on the ground).
 ```
 your receiver(s) ──aircraft.json──> FlightBoard backend ──/api/aircraft──> panel / dashboard
                                            │
+                                           ├── standing-data.sqlite  (local: routes, no network)
                                            ├── adsbdb.com  (optional: airline, route, type)
                                            └── hexdb.io    (optional: owner, and the gaps)
 ```
@@ -585,7 +633,13 @@ lookups run in a **background worker**, never inside the poll loop, so a burst
 of unknown aircraft can't stall the position feed. Results are cached, including
 negative ones, and served stale while they refresh.
 
-The two sources are combined differently on purpose. A **route** stops at the
+Routes are looked up locally first, in the Virtual Radar Server standing data
+if you have built it, and only then online. A multi-stop route is resolved to
+the leg the aircraft is actually flying by picking the pair of airports it sits
+most nearly between, which is how a Seoul-Anchorage-JFK-Brussels cargo run shows
+the right half of itself.
+
+The two online sources are combined differently on purpose. A **route** stops at the
 first answer, because adsbdb returns full airport records and that is what gives
 the board place names, a progress bar and an ETA, while hexdb returns bare
 codes. An **aircraft record** is *merged* across both, because adsbdb has the
@@ -662,6 +716,12 @@ kiosk mode.
   `frontend/glcdfont.js`.
 - **[adsbdb](https://www.adsbdb.com/)** for a genuinely free, keyless API for
   airline, route and aircraft lookups.
+- **[Virtual Radar Server](https://www.virtualradarserver.co.uk/)** for the
+  community-curated [standing data](https://github.com/vradarserver/standing-data)
+  of routes, airports and airlines, released CC0, and for the
+  [SDM site](https://sdm.virtualradarserver.co.uk/Edit) where anyone can correct
+  it. Mirrored hourly by [adsb.lol](https://github.com/adsblol/vrs-standing-data).
+  It is better than every alternative here because people fix it.
 - **[hexdb.io](https://hexdb.io/)** for the same, free and keyless, and for
   knowing the light aircraft and bizjets nobody else does. Adding it as a second
   source was an idea taken from

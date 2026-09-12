@@ -18,3 +18,6 @@ flightboard.env
 
 # Which aircraft you hide. Copy filters.example.json.
 filters.json
+
+# Route database, rebuilt by tools/fetch_routes.py. 30 MB, and regenerable.
+data/

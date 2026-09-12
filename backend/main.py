@@ -16,7 +16,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import config, filters
+from . import config, filters, routes_db
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("flightboard")
@@ -172,6 +172,56 @@ def _parse_hexdb_aircraft(body):
     }
 
 
+def _vrs_airport(a):
+    if not a or a.get("lat") is None:
+        return None
+    return {
+        "iata": a["iata"] or a["icao"],
+        "short": _short_airport(a["name"]),
+        "city": _ascii(a["city"]),
+        "lat": a["lat"],
+        "lon": a["lon"],
+    }
+
+
+def _vrs_route(callsign):
+    """A route from the local standing-data database.
+
+    Kept as the full list of stops rather than an origin and a destination,
+    because a cargo run like ICN-ANC-JFK-BRU has four of them and which pair
+    matters depends on where the aircraft actually is. That is decided later,
+    in _current_leg, once a position is in hand.
+    """
+    raw = routes_db.lookup(callsign)
+    if not raw:
+        return None
+    stops = [_vrs_airport(a) for a in raw["airports"]]
+    if len(stops) < 2 or any(s is None for s in stops):
+        return None
+    return {"stops": stops, "airline": _ascii(raw["airline"])}
+
+
+def _current_leg(route, lat, lon):
+    """Collapse a multi-stop route to the single leg this aircraft is flying.
+
+    Picks the consecutive pair the aircraft sits most nearly between, which is
+    the same measure the plausibility guard uses. Routes that already name one
+    origin and one destination pass straight through.
+    """
+    stops = route.get("stops")
+    if not stops:
+        return route
+    best = min(
+        zip(stops, stops[1:]),
+        key=lambda pair: (haversine_nm(lat, lon, pair[0]["lat"], pair[0]["lon"])
+                          + haversine_nm(lat, lon, pair[1]["lat"], pair[1]["lon"])
+                          - haversine_nm(pair[0]["lat"], pair[0]["lon"],
+                                         pair[1]["lat"], pair[1]["lon"])))
+    a, b = best
+    return {"origin": a["iata"], "destination": b["iata"],
+            "airline": route.get("airline"), "from": a, "to": b}
+
+
 def _sources(kind, value):
     """Where to look something up, in order, stopping at the first answer.
 
@@ -288,8 +338,10 @@ async def _enrich_worker():
             key = await _lookup_queue.get()
             _queued.discard(key)
             kind, value = key.split(":", 1)
-            data = None
-            for url, parse in _sources(kind, value):
+            # The local database first, for routes: no network call, better
+            # curated, and it answers when nothing else is reachable.
+            data = _vrs_route(value) if kind == "route" else None
+            for url, parse in (() if data else _sources(kind, value)):
                 got = None
                 try:
                     r = await client.get(url, timeout=5)
@@ -403,6 +455,7 @@ def _entry(ac):
         if flight:
             route = _enrichment(f"route:{flight}")
             if route:
+                route = _current_leg(route, lat, lon)
                 leg = _leg(route, lat, lon, entry["gs"], ac.get("baro_rate"))
                 if rules.hides_route(leg):
                     return None

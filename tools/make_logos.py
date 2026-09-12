@@ -70,6 +70,9 @@ BACKGROUND = {
     # rule sends it to a light tile and the result is a glaring white square
     # with a dark bird in it. Lifted onto black it is a clean blue crane.
     "LOT": "dark",
+    # Qatar's maroon oryx is dark and only moderately saturated, same case as
+    # LOT. Lifted onto black it reads as a bright oryx instead of a grey square.
+    "QTR": "dark",
 }
 
 # Ink dimmer than this (HSV value, not luminance, so saturated reds aren't
