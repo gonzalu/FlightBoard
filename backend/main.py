@@ -224,7 +224,11 @@ def _route_fits(leg, lat, lon):
     return via - direct <= ROUTE_DETOUR_NM or via / direct <= ROUTE_DETOUR_RATIO
 
 
-def _leg(route, lat, lon, gs):
+# Feet per minute past which an aircraft is unambiguously going somewhere.
+CLIMB_FPM = 500
+
+
+def _leg(route, lat, lon, gs, vertical_rate=None):
     """Per-aircraft view of a cached route: progress, ETA and which end is home.
 
     Returns a new dict rather than annotating the cached one, which is shared
@@ -260,10 +264,20 @@ def _leg(route, lat, lon, gs):
         if plausible:
             out["eta_min"] = round(remaining / gs * 60)
 
+    # The aircraft's own vertical rate outranks the route on which way it is
+    # going. A Seoul-Anchorage-JFK-Brussels cargo run has JFK at both ends of
+    # the day, so the route alone cannot say whether this is the arrival or the
+    # departure - but nothing three minutes from landing climbs at 2,500 fpm.
+    climbing = vertical_rate is not None and vertical_rate > CLIMB_FPM
+    descending = vertical_rate is not None and vertical_rate < -CLIMB_FPM
+    if climbing:
+        out.pop("progress", None)      # both are measured towards a destination
+        out.pop("eta_min", None)       # this aircraft is demonstrably leaving
+
     home = (config.HOME_LAT, config.HOME_LON)
-    if haversine_nm(b["lat"], b["lon"], *home) <= config.LOCAL_AIRPORT_NM:
+    if not climbing and haversine_nm(b["lat"], b["lon"], *home) <= config.LOCAL_AIRPORT_NM:
         out["phase"] = "arriving"
-    elif haversine_nm(a["lat"], a["lon"], *home) <= config.LOCAL_AIRPORT_NM:
+    elif not descending and haversine_nm(a["lat"], a["lon"], *home) <= config.LOCAL_AIRPORT_NM:
         out["phase"] = "departing"
     return out
 
@@ -389,7 +403,7 @@ def _entry(ac):
         if flight:
             route = _enrichment(f"route:{flight}")
             if route:
-                leg = _leg(route, lat, lon, entry["gs"])
+                leg = _leg(route, lat, lon, entry["gs"], ac.get("baro_rate"))
                 if rules.hides_route(leg):
                     return None
                 # A route the aircraft cannot be on is worse than no route: it
