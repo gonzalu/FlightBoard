@@ -16,6 +16,8 @@
 const Debug = (() => {
   let on = false;
   let top = null, bottom = null;
+  let flash = null, flashUntil = 0;
+  let lastSeen = null, lastShown = 0;
 
   function mount() {
     if (top) return;
@@ -69,6 +71,7 @@ const Debug = (() => {
     ];
     if (d.filters_error) lines.push(`FILTERS BROKEN  ${d.filters_error}`);
     if (d.last_error) lines.push(`last error  ${d.last_error}`);
+    if (flash && Date.now() < flashUntil) lines.push(`>> ${flash}`);
     return lines;
   }
 
@@ -97,7 +100,10 @@ const Debug = (() => {
     // route
     const rt = ac.route || {};
     const det = dbg.detour;
-    lines.push(`route       ${cacheLine(r)}` +
+    lines.push(`route       ` +
+               (dbg.route === null || dbg.route === undefined
+                 ? 'not looked up - the aircraft transmits no ident'
+                 : cacheLine(r)) +
                (rt.airline ? `   airline ${rt.airline}` : ''));
     if (rt.origin || rt.destination) {
       lines.push(`            ${nn(rt.origin)} > ${nn(rt.destination)}` +
@@ -118,13 +124,37 @@ const Debug = (() => {
         `   drew ${L.how}`
       : `no key   drew ${nn(L.how)}   ` +
         (info.operator_code
-          ? `(operator code ${info.operator_code} names no mark we hold - hexdb often ` +
-            `puts the aircraft type there${info.owner ? `, and "${info.owner}" is not in ` +
-            `OPERATOR_LOGOS` : ''})`
+          ? `(operator code ${info.operator_code}` +
+            `${tsrc.operator_code ? ' from ' + tsrc.operator_code : ''} names no mark we ` +
+            `hold - the lookups often put the aircraft TYPE in that field` +
+            `${info.owner ? `, and "${info.owner}" is not in OPERATOR_LOGOS` : ''})`
           : info.owner
             ? `(no airline prefix in the ident, and "${info.owner}" is not in OPERATOR_LOGOS)`
             : `(no airline prefix in the ident, and no operator or owner to fall back on)`)));
     return lines;
+  }
+
+  /*
+   * Copy without navigator.clipboard.
+   *
+   * That API exists only in a secure context. The board is served over plain
+   * HTTP to the LAN - http://ollamator:8090, neither https nor localhost - so
+   * on the machine you actually read the board from it is undefined and the
+   * copy silently does nothing. execCommand is deprecated and works here,
+   * which is the entire argument for using it.
+   */
+  function copyText(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length);   // iOS wants the explicit range
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    ta.remove();
+    return ok;
   }
 
   return {
@@ -138,9 +168,28 @@ const Debug = (() => {
     },
     update(data, ac, snap) {
       if (!on || !top) return;
+      lastSeen = data; lastShown = snap.shown;
       top.textContent = systemLines(data, snap.shown).join('\n');
       bottom.textContent = aircraftLines(ac, snap).join('\n');
     },
     text() { return top ? top.textContent + '\n\n' + bottom.textContent : ''; },
+
+    /** Copy both bands, and say so on screen: a silent copy is unprovable. */
+    copy() {
+      if (!top) return;
+      const body = this.text();
+      const done = ok => {
+        flash = ok ? `copied ${body.length} characters`
+                   : 'copy FAILED - select the text and use ctrl+c';
+        flashUntil = Date.now() + 2500;
+        top.textContent = systemLines(lastSeen, lastShown).join('\n');
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(body)
+          .then(() => done(true), () => done(copyText(body)));
+      } else {
+        done(copyText(body));
+      }
+    },
   };
 })();

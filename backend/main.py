@@ -393,7 +393,9 @@ async def _enrich_worker():
             # board shows; it is what lets debug mode answer "why does it say
             # that?" without a bisect through three APIs by hand.
             src = {f: "vrs" for f, v in (local or {}).items() if v}
-            asked = ["vrs"] if local is not None else []
+            # always listed: the local database is always consulted, and
+            # "asked and had nothing" is a different fact from "never asked"
+            asked = ["vrs"]
             enough = local is not None and kind == "route"
             for name, url, parse in (() if enough else _sources(kind, value)):
                 got = None

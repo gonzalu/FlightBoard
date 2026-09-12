@@ -755,9 +755,7 @@ window.addEventListener('resize', layoutCanvas);
 // and reading a fault back over the phone is worse than pasting it.
 document.addEventListener('keydown', e => {
   if (e.key === 'd') { Debug.set(!Debug.on); paint(); poll(); }
-  if (e.key === 'c' && Debug.on && navigator.clipboard) {
-    navigator.clipboard.writeText(Debug.text());
-  }
+  if (e.key === 'c' && Debug.on) Debug.copy();
 });
 
 if (debugParam !== null) Debug.set(debugParam !== '0');
