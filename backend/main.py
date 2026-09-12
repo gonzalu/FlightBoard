@@ -122,6 +122,11 @@ def _parse_aircraft(body):
         "registration": ac.get("registration"),
         "type": ac.get("type"),
         "manufacturer": ac.get("manufacturer"),
+        # adsbdb carries these too, and taking them here means an aircraft is
+        # named and badged even when hexdb has never heard of its hex.
+        "owner": _ascii(ac.get("registered_owner")),
+        "operator_code": (ac.get("registered_owner_operator_flag_code")
+                          or "").strip().upper() or None,
     }
 
 
