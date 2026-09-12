@@ -66,6 +66,10 @@ BACKGROUND = {
     # of stars survive it. Catching it by threshold would mean dropping the
     # saturation limit below 98, which moves 60 other carriers with it.
     "MWT": "dark",
+    # LOT's crane is navy on white: dim and only moderately saturated, so the
+    # rule sends it to a light tile and the result is a glaring white square
+    # with a dark bird in it. Lifted onto black it is a clean blue crane.
+    "LOT": "dark",
 }
 
 # Ink dimmer than this (HSV value, not luminance, so saturated reds aren't
@@ -86,6 +90,13 @@ LIFT_TARGET_V = 225
 # raise it to a proper JetBlue blue, which reads better on the panel. Prefer the
 # ordinary path over a special case.
 KNOCK_COLOURED_BG = set()
+
+# Note on logo-sources/custom, which is passed first: it also holds artwork
+# picked over what the default directories would choose. Icelandair is the
+# example - flightaware_logos has a navy tail with a pale swoosh, and files the
+# *same image* under FXI for Air Iceland, so the two were indistinguishable.
+# radarbox_logos has Icelandair's real livery, blue with the gold flag, so that
+# one is copied into custom to win.
 
 # Carriers whose artwork is rejected outright, so they fall back to the
 # generated tail fin. Not every mark can survive 28 pixels: Tradewind's is a

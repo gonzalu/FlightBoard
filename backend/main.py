@@ -389,10 +389,17 @@ def _entry(ac):
                     return None
                 # A route the aircraft cannot be on is worse than no route: it
                 # is a confident, specific, wrong answer on the display.
+                #
+                # Only the airports are wrong, though. The airline comes from
+                # the callsign prefix and is still right, so keep it: throwing
+                # the whole record away cost line 1 its name and turned
+                # "Southwest 1304" back into "SWA1304".
                 if _route_fits(route, lat, lon):
                     entry["route"] = leg
-                else:
-                    log.debug("dropping implausible route for %s: %s-%s",
+                elif leg.get("airline"):
+                    entry["route"] = {"airline": leg["airline"], "origin": None,
+                                      "destination": None, "from": None, "to": None}
+                    log.debug("dropped airports for %s (%s-%s), kept the airline",
                               flight, route.get("origin"), route.get("destination"))
         if entry["hex"]:
             info = _enrichment(f"type:{entry['hex']}")
