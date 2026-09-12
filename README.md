@@ -269,7 +269,7 @@ generating and put its directory first:
 
 ```bash
 python3 tools/fetch_logo_art.py
-python3 tools/make_logos.py logo-sources/fetched \
+python3 tools/make_logos.py logo-sources/custom logo-sources/fetched \
     /tmp/logosrc/airline-logos-main/flightaware_logos \
     /tmp/logosrc/airline-logos-main/radarbox_logos \
     /tmp/logosrc/airline-logos-main/radarbox_banners \
@@ -277,6 +277,21 @@ python3 tools/make_logos.py logo-sources/fetched \
 ```
 
 Skip it and those carriers just fall back to the archive, same as before.
+
+**A clean clone will not reproduce every mark, and the generator says which.**
+`logo-sources/` is gitignored, because it holds trademarked artwork, so anything
+hand-supplied stays on the machine it was made on. Where a better source exists
+in the archive it is named in `PREFER_SOURCE` instead of being copied, which
+does travel. What is left needs a local file:
+
+| carrier | what it needs |
+|---|---|
+| NYPD | their header logo saved from nyc.gov, which answers a plain client with 403 |
+| VJA | Vista America's banner from the archive's `avcodes_banners`, a directory this project does not pass |
+| GPD | Tradewind's mark redrawn by hand at 28×28, since no reduction of it works |
+
+Run the generator and it reports any table entry it could not satisfy, so a
+board that differs from its source says so rather than quietly drifting.
 
 A few knobs at the top of `tools/make_logos.py`, all one-line entries:
 
@@ -433,7 +448,7 @@ python3 tools/fetch_logo_art.py
 mkdir -p /tmp/logosrc && cd /tmp/logosrc
 curl -sL https://codeload.github.com/Jxck-S/airline-logos/tar.gz/refs/heads/main | tar -xz
 cd ~/flightboard
-python3 tools/make_logos.py logo-sources/fetched \
+python3 tools/make_logos.py logo-sources/custom logo-sources/fetched \
     /tmp/logosrc/airline-logos-main/flightaware_logos \
     /tmp/logosrc/airline-logos-main/radarbox_logos \
     /tmp/logosrc/airline-logos-main/radarbox_banners \

@@ -98,6 +98,17 @@ KNOCK_COLOURED_BG = set()
 # radarbox_logos has Icelandair's real livery, blue with the gold flag, so that
 # one is copied into custom to win.
 
+# Carriers where one directory holds better artwork than the priority order
+# would pick. Stating it here rather than copying the file into
+# logo-sources/custom matters: that directory is gitignored, so a copy does not
+# travel and the board stops reproducing from a clean clone.
+PREFER_SOURCE = {
+    # flightaware_logos files the same navy tail under both ICE and FXI, so
+    # Icelandair and Air Iceland came out identical. radarbox has the real
+    # livery, blue with the gold flag swoosh.
+    "ICE": "radarbox_logos",
+}
+
 # Carriers whose artwork is rejected outright, so they fall back to the
 # generated tail fin. Not every mark can survive 28 pixels: Tradewind's is a
 # ring of ten tiny aircraft and Slate's a fine line drawing, and both reduce to
@@ -332,6 +343,19 @@ def main():
                 continue
             candidates.setdefault(stem.upper(), []).append(os.path.join(directory, name))
 
+    for code, wanted in PREFER_SOURCE.items():                 # promote, don't copy
+        paths = candidates.get(code)
+        if paths:
+            paths.sort(key=lambda p: os.path.basename(os.path.dirname(p)) != wanted)
+
+    given = {os.path.basename(os.path.normpath(d)) for d in args.src}
+    for table, label in ((CROPS, "CROPS"), (PREFER_SOURCE, "PREFER_SOURCE")):
+        for code, value in table.items():
+            wanted = value[0] if isinstance(value, tuple) else value
+            if wanted not in given:
+                print(f"note: {label}[{code!r}] names the directory {wanted!r}, which "
+                      f"was not passed, so that entry does nothing", file=sys.stderr)
+
     logos, skipped, light, rescued = {}, [], 0, 0
     for code, paths in sorted(candidates.items()):
         reason = "no source"
@@ -369,6 +393,16 @@ def main():
     print(f"wrote {args.out}: {len(logos)} logos "
           f"({light} on a light tile, {len(logos) - light} on black, "
           f"{rescued} from a fallback source), {size_kb:.0f} KB")
+
+    # A table entry naming a carrier we produced nothing for is a broken
+    # reference, usually hand-picked artwork that never left the machine it was
+    # made on, since logo-sources/ is gitignored. Worth saying plainly: it is
+    # exactly how a board stops reproducing from a clean clone.
+    missing = sorted({c for c in list(CROPS) + list(PREFER_SOURCE)} - set(logos))
+    if missing:
+        print(f"note: no artwork found for {', '.join(missing)}, though the tables "
+              f"name them - supply it locally or the board differs from its source",
+              file=sys.stderr)
 
     # Rejections are normal and expected - obscure carriers whose artwork can't
     # survive the reduction fall back to a generated tail fin. Listing every one
