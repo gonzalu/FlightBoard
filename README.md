@@ -644,8 +644,42 @@ git clone https://github.com/YOUR-GITHUB-USER/YOUR-LOGO-REPO.git logo-sources/cu
 ```
 
 Then run the generator as normal. It looks there first, so the board comes out
-identical to the one the artwork was made on. A private repository asks for
-credentials the first time.
+identical to the one the artwork was made on.
+
+**A private repository will not clone with your GitHub password.** Git password
+authentication was switched off in 2021, so an https clone prompts for a
+username and password and then refuses whatever you type:
+
+```
+remote: Invalid username or token. Password authentication is not supported
+```
+
+Use a **deploy key** instead. It is a read-only SSH key belonging to that one
+repository — nothing else on your account — which is exactly what a board wants,
+and it needs no interactive login at all. On the board:
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/flightboard-logos -N ""
+cat ~/.ssh/flightboard-logos.pub
+```
+
+Paste that into the repository's **Settings → Deploy keys → Add deploy key**,
+leave "Allow write access" unticked, then tell ssh to use it:
+
+```bash
+cat >> ~/.ssh/config <<'EOF'
+Host github-logos
+  HostName github.com
+  User git
+  IdentityFile ~/.ssh/flightboard-logos
+EOF
+
+git clone git@github-logos:YOUR-GITHUB-USER/YOUR-LOGO-REPO.git logo-sources/custom
+```
+
+A personal access token works too, used in place of the password, but it grants
+far more than one repository and has to be renewed. The deploy key is one per
+board, revocable on its own, and read-only.
 
 To update the artwork later, change it in the repository, then `git pull` inside
 `logo-sources/custom` and regenerate.
@@ -671,15 +705,6 @@ not change what it is, and police, ambulance and government insignia carry
 restrictions of their own on top of ordinary trademark. Private costs nothing,
 works the same, and is the difference between storing something and publishing
 it.
-
-On a machine you cannot log into as yourself, add a **read-only deploy key** to
-the repository — one per machine, revocable individually, granting nothing but
-read access to that one repository:
-
-```bash
-ssh-keygen -t ed25519 -f ~/.ssh/flightboard-logos -N ""
-cat ~/.ssh/flightboard-logos.pub          # paste into Settings → Deploy keys
-```
 
 ### What a clean clone cannot reproduce
 
