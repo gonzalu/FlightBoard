@@ -44,9 +44,12 @@ uses, and every dot you see is an individually addressed LED.
     + [Option C — just a browser](#option-c--just-a-browser)
   * [Keeping it up to date](#keeping-it-up-to-date)
   * [Hiding traffic you don't want](#hiding-traffic-you-dont-want)
+  * [Customising the logos](#customising-the-logos)
   * [Configuration reference](#configuration-reference)
   * [How it works](#how-it-works)
+  * [Debug mode](#debug-mode)
   * [Troubleshooting](#troubleshooting)
+  * [Uninstalling](#uninstalling)
   * [Acknowledgements](#acknowledgements)
   * [License](#license)
 
@@ -132,6 +135,7 @@ does FlightBoard.
 ### 1. Clone it
 
 ```bash
+sudo apt install -y git        # a stock Ubuntu desktop does not have it
 git clone https://github.com/gonzalu/FlightBoard.git ~/flightboard
 cd ~/flightboard
 ```
@@ -175,10 +179,21 @@ Approximate coordinates are fine — three or four decimals off any map. They on
 centre the radar and set the range filter, and they stay on your machine:
 `flightboard.env` is gitignored because it holds your location.
 
-Set it once. That same file is read both by a manual run and by the systemd
-service in step 5, so there is never a second copy of your settings to keep in
-step. Anything already in the environment beats the file, which is what makes a
-one-off easy without editing anything:
+**You only write this down once.** Both ways of starting the board read this
+same file: the manual run in step 4 and the systemd service in step 5. There is
+no second copy to keep in step.
+
+Settings are read from three places, and the first one that has an answer wins:
+
+| Source | Beats |
+|---|---|
+| the environment | everything below |
+| `flightboard.env` | the defaults |
+| built-in defaults | nothing |
+
+That order is what makes a one-off change easy. Putting `NAME=value` in front of
+a command is shell syntax for *run this once, with that set* — nothing is
+edited, nothing persists, and the next start is back to whatever the file says:
 
 ```bash
 FLIGHTBOARD_MAX_AIRCRAFT=200 .venv/bin/uvicorn backend.main:app
@@ -211,156 +226,89 @@ route lookups fill in progressively after the first aircraft appear.
 
 ### 5. Run it at boot
 
+**Stop the manual run from step 4 first** — Ctrl+C in that terminal. Both bind
+port 8090, and the failure is a confusing one: the service cannot start, retries
+every five seconds forever, and the board keeps working the whole time because
+the manual process is still answering. It looks like it worked.
+
+The unit needs your account name and the path you cloned to. You do not have to
+type them, because `make-units.py` already knows both:
+
 ```bash
-sudo cp flightboard-backend.service /etc/systemd/system/
-sudoedit /etc/systemd/system/flightboard-backend.service   # fill in the CHANGEME lines
+python3 tools/make-units.py backend | sudo tee /etc/systemd/system/flightboard-backend.service
 sudo systemctl daemon-reload
 sudo systemctl enable --now flightboard-backend
 systemctl status flightboard-backend
 ```
 
-The unit file has an `EDIT THESE` block, and it is only the account name and
-two paths — your coordinates and receivers stay in `flightboard.env`, which the
-unit reads with `EnvironmentFile=`. See
-[Keeping it up to date](#keeping-it-up-to-date) for what a later change needs,
-and what it doesn't.
+It prints to standard output rather than writing to `/etc` itself, so you see
+exactly what is about to be installed. Your coordinates and receivers are not in
+there — they stay in `flightboard.env`, which the unit reads with
+`EnvironmentFile=`.
+
+<details><summary>Filling it in by hand instead</summary>
+
+Needed when the service should run as a **different account** than the one
+installing, which is the one thing a script cannot work out.
+
+```bash
+sudo cp flightboard-backend.service /etc/systemd/system/
+sudoedit /etc/systemd/system/flightboard-backend.service   # the YOUR-USER lines
+sudo systemctl daemon-reload
+sudo systemctl enable --now flightboard-backend
+```
+
+Check it saved. `sudoedit` installs your changes only if the editor exits
+cleanly, and says nothing at all when it doesn't:
+
+```bash
+grep -c YOUR-USER /etc/systemd/system/flightboard-backend.service   # must print 0
+```
+</details>
+
+See [Keeping it up to date](#keeping-it-up-to-date) for what a later change
+needs, and what it doesn't.
 
 ---
 
 ## Airline logos (optional)
 
 Out of the box, carriers are drawn as a swept tail fin in their brand colours.
-For real airline logos, generate them from artwork you supply:
+That is a deliberate fallback, not a broken state, and a board that never runs
+this section still looks finished.
+
+For real airline logos, one block:
 
 ```bash
 sudo apt install -y python3-pil        # Debian's prebuilt Pillow
+python3 tools/fetch_logo_art.py        # three marks the bulk archive does badly
 mkdir -p /tmp/logosrc && cd /tmp/logosrc
 curl -sL https://codeload.github.com/Jxck-S/airline-logos/tar.gz/refs/heads/main | tar -xz
 cd ~/flightboard
-python3 tools/make_logos.py \
-    /tmp/logosrc/airline-logos-main/flightaware_logos \
-    /tmp/logosrc/airline-logos-main/radarbox_logos \
-    /tmp/logosrc/airline-logos-main/radarbox_banners \
-    --size 28 --out frontend/logos.js
-rm -rf /tmp/logosrc                    # ~150 MB of source artwork, no longer needed
+python3 tools/make_logos.py     logo-sources/custom logo-sources/fetched     /tmp/logosrc/airline-logos-main/flightaware_logos     /tmp/logosrc/airline-logos-main/radarbox_logos     /tmp/logosrc/airline-logos-main/radarbox_banners     --size 28 --out frontend/logos.js
+rm -rf /tmp/logosrc                    # 70 MB of source artwork, no longer needed
 ```
 
-Two deliberate details there. It uses **`python3`, not the venv** — `make_logos.py`
-imports nothing but PIL, so it has no business needing the app's environment. And
-it installs Pillow **via apt rather than pip**, because current Pillow has no
-armv7l wheel: on a Raspberry Pi, `pip install Pillow` tries to compile from source
-and fails unless you also install `libjpeg-dev` and `zlib1g-dev`. Debian's package
-is prebuilt and works immediately.
+About a minute, even on a Pi 3. No restart needed: the frontend fingerprint
+changes and every display picks it up by itself.
 
-Generating all ~1,650 logos takes about a minute, even on a Pi 3. Expect a line
-reporting some carriers had no usable artwork — that's normal, they fall back to
-tail fins. Add `--verbose` to see which.
+The first two directories hold hand-supplied and hand-fetched artwork. Neither
+ships in a clone, and the generator says so and carries on when they are
+missing. Listing them costs nothing and means the same command works before and
+after you add your own.
 
-Reload the page and airlines appear with their own marks. Files are matched by
-**ICAO code** (`DAL.png`, `AAL.png`) because that's the prefix FlightBoard reads
-off the callsign. Later directories act as fallbacks, used only when earlier
-artwork can't survive being reduced to a 28 px square.
+Expect two kinds of note. Some carriers have no usable artwork and fall back to
+tail fins; `--verbose` names them. And a couple named in the generator's own
+tables need a local file, so a board that differs from its source says so rather
+than drifting quietly.
 
-A handful of carriers aren't served well by that archive: their entry is a long
-wordmark that turns to mush at 28 px, while a good compact mark exists elsewhere.
-`tools/fetch_logo_art.py` pulls those specific files — currently NetJets' app
-icon and Flexjet's original vector, both of which are then cropped to the part
-that reads. It's a short hand-checked list, not a crawler. Run it before
-generating and put its directory first:
+**Open `/logos.html` to see what you got.** Every mark, exactly as the panel
+draws it, filterable by code and by background treatment. Far easier than
+waiting for a carrier to fly over.
 
-```bash
-python3 tools/fetch_logo_art.py
-python3 tools/make_logos.py logo-sources/custom logo-sources/fetched \
-    /tmp/logosrc/airline-logos-main/flightaware_logos \
-    /tmp/logosrc/airline-logos-main/radarbox_logos \
-    /tmp/logosrc/airline-logos-main/radarbox_banners \
-    --size 28 --out frontend/logos.js
-```
-
-Skip it and those carriers just fall back to the archive, same as before.
-
-**A clean clone will not reproduce every mark, and the generator says which.**
-`logo-sources/` is gitignored, because it holds trademarked artwork, so anything
-hand-supplied stays on the machine it was made on. Where a better source exists
-in the archive it is named in `PREFER_SOURCE` instead of being copied, which
-does travel. What is left needs a local file:
-
-| carrier | what it needs |
-|---|---|
-| NYPD | their header logo saved from nyc.gov, which answers a plain client with 403 |
-| VJA | Vista America's banner from the archive's `avcodes_banners`, a directory this project does not pass |
-| GPD | Tradewind's mark redrawn by hand at 28×28, since no reduction of it works |
-
-Run the generator and it reports any table entry it could not satisfy, so a
-board that differs from its source says so rather than quietly drifting.
-
-A few knobs at the top of `tools/make_logos.py`, all one-line entries:
-
-| | |
-|---|---|
-| `BACKGROUND` | force a carrier onto black or onto a light tile |
-| `CROPS` | use a square region of a wider logo |
-| `KNOCK_COLOURED_BG` | strip a solid colour background |
-| `LIGHT_INK_VALUE` / `LIGHT_INK_SAT` | where the automatic light/dark decision sits |
-
-Almost every carrier ends up knocked out on black, which is what an LED sign
-looks like. A light tile — every LED lit, the mark composited on top — is the
-exception, reserved for ink that is both dim and washed out, like a plain black
-wordmark. Colour is not the same as brightness here: a saturated navy or a deep
-red looks dark but reads beautifully once its brightness is lifted, so the
-decision is made on the ink's HSV *value*, not its luminance.
-
-`frontend/logo-aliases.js` maps a callsign prefix to another carrier's logo,
-which is how regional airlines get their mainline partner's tail.
-
-**Operators that aren't airlines** are handled in the same file. Police, air
-ambulance, tour and survey aircraft fly under a bare registration, so there's no
-callsign prefix to key a logo off. Two things cover them. Where the operator has
-a real ICAO code, hexdb reports it and the normal lookup takes over by itself —
-that's how a NetJets bizjet flying as `N741QS` gets the NetJets mark. Where it
-has no code at all, map part of the registered owner's name in `OPERATOR_LOGOS`
-and supply the artwork:
-
-```js
-const OPERATOR_LOGOS = {
-  'NEW YORK CITY POLICE': 'NYPD',
-};
-```
-
-Then drop `NYPD.png` into a source directory and put that directory first when
-generating:
-
-```bash
-python3 tools/make_logos.py logo-sources/custom logo-sources/fetched     /tmp/logosrc/airline-logos-main/flightaware_logos ...
-```
-
-The name is matched as an uppercase substring of the owner, so a partial name is
-enough, and the longest matching entry wins. Keep entries specific: `POLICE`
-alone would put one badge on every force in the country.
-
-Some carriers' marks are just their name, and a seven-letter wordmark reduced to
-a 28 px tile gets about four pixels a letter and runs together. No amount of
-source resolution fixes that. `frontend/wordmarks.js` draws those as type
-instead, which stays sharp and is what an LED sign would really do; jetBlue
-ships as the worked example. Reach for it only when the carrier genuinely has no
-compact symbol anywhere, since the panel already prints the airline's name in
-the line beside the tile and a wordmark says it twice. An entry is only the text, since the colour comes
-from `AIRLINE_COLORS` in `panel.js`, and a listed wordmark is preferred to
-generated artwork.
-
-It carries its own **narrow proportional face**, 2 to 4 columns a glyph, because
-the panel's `glcdfont` is fixed at 6 columns: "jetBlue" would want 42 columns and
-has 28. Proportionally it fits on one line with a column spare. The face holds
-only the letters the entries actually use, and a wordmark naming a letter that
-hasn't been drawn falls back to artwork rather than rendering a gap, so adding a
-carrier means adding its missing glyphs. They're written as pictures, so that is
-done by eye.
-
-**Open `/logos.html` to see what you actually got.** It renders every mark
-exactly as the panel draws it, wordmarks included, filterable by ICAO code and
-by background treatment. Far easier than waiting for a carrier to fly overhead to find out
-whether its mark survived the reduction — and it's how you decide which entries
-the tables above need.
+To fix a carrier that came out badly, add one the archive doesn't have, or give
+a police or air-ambulance operator its own badge, see
+[Customising the logos](#customising-the-logos).
 
 > ⚠️ **Airline logos are trademarks of their airlines.** `frontend/logos.js` is
 > generated locally and is **gitignored on purpose** — please don't commit
@@ -414,23 +362,70 @@ them know what day it is.
 The stick loads the page and renders it itself, so no computer has to stay awake
 driving the picture.
 
+Two steps, in order. The first proves it works and tells you your Chromecast's
+exact name; the second keeps it working.
+
+**1. Cast it once, by hand.**
+
 ```bash
 .venv/bin/pip install catt
 .venv/bin/catt scan
-.venv/bin/catt -d "Living Room TV" cast_site "http://YOUR-SERVER:8090/"
 ```
 
-To have it re-establish itself after a reboot or power blip:
+`catt scan` prints the friendly name and address of every Chromecast it can
+find. Use that name exactly — you need it again in step 2 — and cast to it:
 
 ```bash
-sudo cp flightboard-cast.service flightboard-cast.timer /etc/systemd/system/
-sudoedit /etc/systemd/system/flightboard-cast.service   # user, device name, URL
+.venv/bin/catt -d "YOUR-CHROMECAST" cast_site "http://YOUR-SERVER-IP:8090/"
+```
+
+> **Use the IP address, not a hostname.** A Chromecast pins itself to Google's
+> DNS servers and ignores the resolver your DHCP hands out, so a name from your
+> own router resolves fine everywhere else and fails on the stick. If the
+> server's address can move, give it a DHCP reservation.
+
+> `catt` prints *Casting…* as soon as the receiver accepts the URL, before it
+> has tried to load anything. That message is not proof the page came up. Look
+> at the TV.
+
+**2. Have it re-establish itself** after a reboot, a power blip, or someone
+casting something else and stopping.
+
+```bash
+python3 tools/make-units.py cast --device "YOUR-CHROMECAST" --url "http://YOUR-SERVER-IP:8090/"     | sudo tee /etc/systemd/system/flightboard-cast.service
+sudo cp flightboard-cast.timer /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now flightboard-cast.timer
 ```
 
-The watchdog checks every five minutes and only re-casts an **idle** Chromecast —
-if you're watching something else on that TV, it leaves you alone.
+The watchdog runs every five minutes and only re-casts an **idle** Chromecast —
+if you're watching something else on that TV, it leaves you alone. Check it
+found the right device:
+
+```bash
+journalctl -u flightboard-cast.service -n 5
+```
+
+`Kitchen TV: showing FlightBoard` is what success looks like. If the name
+matches nothing it says so and lists what it did find, and the unit fails
+rather than passing quietly.
+
+<details><summary>Filling the cast unit in by hand instead</summary>
+
+```bash
+sudo cp flightboard-cast.service flightboard-cast.timer /etc/systemd/system/
+sudoedit /etc/systemd/system/flightboard-cast.service
+```
+
+**Quote the device name.** `Environment=` takes a *space-separated list* of
+assignments, so an unquoted two-word name sets the device to its first word and
+throws the rest away:
+
+```
+Environment="FLIGHTBOARD_CAST_DEVICE=Kitchen TV"     ← right
+Environment=FLIGHTBOARD_CAST_DEVICE=Kitchen TV       ← sets it to "Kitchen"
+```
+</details>
 
 > `cast_site` relies on the DashCast receiver, which isn't a documented Google
 > feature. It works on classic Chromecast sticks and Chromecast Ultra. It does
@@ -473,7 +468,8 @@ What actually needs what:
 | anything in `frontend/` | nothing at all — see *Displays update themselves* below |
 | anything in `backend/` | `sudo systemctl restart flightboard-backend` |
 | `flightboard.env` | a restart; settings are read once, at startup |
-| `flightboard-backend.service` | `sudo systemctl daemon-reload`, then a restart |
+| `flightboard-backend.service` | re-install it, `sudo systemctl daemon-reload`, then a restart. `tools/make-units.py backend` prints the filled-in file |
+| `flightboard-cast.service` | same, then `sudo systemctl restart flightboard-cast.timer` |
 | `tools/make_logos.py`, `tools/fetch_logo_art.py` | regenerate the logos — see below |
 | `tools/fetch_standing_data.py` | rebuild the local database: `python3 tools/fetch_standing_data.py` |
 
@@ -584,6 +580,137 @@ and may let an aircraft show for a moment before it disappears.
 
 The startup log says what is being hidden, which is the first place to look when
 something you expected doesn't appear.
+
+---
+
+## Customising the logos
+
+Read this on the day a carrier looks wrong, not while you are installing.
+
+### Where artwork comes from
+
+`make_logos.py` takes source directories in order and matches files by **ICAO
+code** — `DAL.png`, `AAL.png` — because that is the prefix read off a callsign.
+Earlier directories win; later ones are fallbacks, used when earlier artwork
+cannot survive being reduced to a 28 px square.
+
+| directory | holds |
+|---|---|
+| `logo-sources/custom` | anything you supply by hand |
+| `logo-sources/fetched` | written by `tools/fetch_logo_art.py` |
+| the three archive directories | ~1,650 marks from Jxck-S/airline-logos |
+
+`tools/fetch_logo_art.py` is a short hand-checked list, not a crawler. It
+currently pulls three carriers the bulk archive serves badly: NetJets' app icon,
+Flexjet's original vector, and PlaneSense's site icon. Each is then cropped to
+the part that reads at this size.
+
+### Carrying your own artwork between machines
+
+`logo-sources/` is gitignored, which is what keeps trademarked artwork out of
+this repository. It also means nothing stops you keeping your own artwork in a
+repository of your own:
+
+```bash
+git clone git@github.com:you/my-flightboard-logos.git logo-sources/custom
+```
+
+Then regenerate. The generator already looks there first, so a second board
+gets your marks with one clone instead of a pile of `scp`.
+
+**Keep that repository private.** Moving trademarked artwork somewhere else does
+not change what it is, and police, ambulance and government insignia carry
+restrictions of their own on top of ordinary trademark. Private costs you
+nothing and is exactly as convenient.
+
+### What a clean clone cannot reproduce
+
+Where a better source exists inside the archive it is named in `PREFER_SOURCE`
+rather than copied, and that does travel. What is left needs a local file:
+
+| carrier | what it needs |
+|---|---|
+| NYPD | their header logo from nyc.gov, which answers a plain client with 403 |
+| VJA | Vista America's banner from the archive's `avcodes_banners`, a directory this project does not pass |
+| GPD | Tradewind's mark redrawn by hand at 28×28, since no reduction of it works |
+
+Run the generator and it reports any table entry it could not satisfy.
+
+### The override tables
+
+All one-line entries at the top of `tools/make_logos.py`:
+
+| | |
+|---|---|
+| `BACKGROUND` | force a carrier onto black or onto a light tile |
+| `CROPS` | use a square region of a wider logo |
+| `PREFER_SOURCE` | prefer one archive directory's version over another's |
+| `PREFER_TAIL_FIN` | reject the artwork outright and draw a fin instead |
+| `KNOCK_COLOURED_BG` | strip a solid colour background |
+| `LIGHT_INK_VALUE` / `LIGHT_INK_SAT` | where the automatic light/dark decision sits |
+
+Almost every carrier ends up knocked out on black, which is what an LED sign
+looks like. A light tile — every LED lit, the mark composited on top — is the
+exception, reserved for ink that is both dim and washed out, like a plain black
+wordmark.
+
+Colour is not the same as brightness here, and that distinction is the whole
+rule. A saturated navy or a deep red *looks* dark but reads beautifully once its
+brightness is lifted, so the decision is made on the ink's HSV **value**, not its
+luminance. Deciding on luminance sent 53% of carriers to glaring grey tiles;
+deciding on value sends 6%.
+
+### Hand-drawing a mark
+
+A 28×28 source is passed through untouched, so a mark drawn at exactly that size
+bypasses the fitting entirely. Worth knowing, because for some logos nothing
+else works: Tradewind's survived being redrawn by hand and survived no reduction
+at all. This is the same reason the panel uses a real bitmap font rather than a
+rasterised webfont.
+
+### Regional airlines and operators that aren't airlines
+
+`frontend/logo-aliases.js` maps a callsign prefix to another carrier's logo,
+which is how regionals wear their mainline partner's tail.
+
+Police, air ambulance, tour and survey aircraft fly under a bare registration,
+so there is no callsign prefix to key a logo off. Two things cover them:
+
+- **Where the operator has a real ICAO code**, the lookups report it and the
+  normal path takes over by itself. That is how a NetJets bizjet flying as
+  `N741QS` gets the NetJets mark. The code is only trusted when it names a mark
+  actually held, because the lookups frequently put the *aircraft type* in that
+  field: a Bell 407 arrives as `B407` and an AS350 as `AS50`.
+- **Where it has no code at all**, map part of the registered owner's name:
+
+```js
+const OPERATOR_LOGOS = {
+  'NEW YORK CITY POLICE': 'NYPD',
+};
+```
+
+Then drop `NYPD.png` into `logo-sources/custom` and regenerate. The name is
+matched as an uppercase substring of the owner and the longest match wins, so a
+partial name is enough. Keep entries specific: `POLICE` alone would put one
+badge on every force in the country.
+
+### Wordmarks
+
+Some carriers' marks are just their name, and a seven-letter wordmark reduced to
+28 px gets four pixels a letter and runs together. No source resolution fixes
+that. `frontend/wordmarks.js` draws those as type instead, which stays sharp and
+is what an LED sign would really do. jetBlue ships as the worked example.
+
+Reach for it only when a carrier genuinely has no compact symbol anywhere, since
+the panel already prints the airline's name beside the tile and a wordmark says
+it twice. An entry is only the text; the colour comes from `AIRLINE_COLORS`.
+
+It carries its own **narrow proportional face**, 2 to 4 columns a glyph, because
+`glcdfont` is fixed at 6: "jetBlue" would want 42 columns and has 28.
+Proportionally it fits with a column spare. The face holds only the letters the
+entries use, and a wordmark naming a letter that hasn't been drawn falls back to
+artwork rather than rendering a gap — so adding a carrier means adding its
+missing glyphs. They are written as pictures, so that is done by eye.
 
 ---
 
@@ -716,6 +843,57 @@ first one and then quietly lie to you.
 
 ## Troubleshooting
 
+**Start here.** Open the board with `?debug=1` on the end of the URL, or press
+**d**. The top band names every receiver and whether it answered, how stale the
+data is, whether the local database was built, and which settings file was
+read — which is most of this section answered in one glance. Press **c** to copy
+the whole thing. See [Debug mode](#debug-mode).
+
+**The service won't start, but the board works anyway**
+A manual `uvicorn` from step 4 is still running and holding port 8090. The
+service cannot bind, retries every five seconds forever, and the board keeps
+working because the manual process is answering. `systemctl status
+flightboard-backend` shows the truth. Ctrl+C the manual run.
+
+**The unit still says `YOUR-USER` after you edited it**
+`sudoedit` installs your changes only when the editor exits cleanly, and says
+nothing when it doesn't. Check with
+`grep -c YOUR-USER /etc/systemd/system/flightboard-backend.service`, which must
+print `0`. Generating the unit with `tools/make-units.py` avoids this entirely.
+
+**A receiver shows FAILED in the debug band**
+Read the error next to its name. *All connection attempts failed* is usually a
+hostname that doesn't resolve or a receiver that's off; a *404* means the host
+is up but the path is wrong for its software. Check the URL from the machine
+running FlightBoard, not from your laptop:
+`curl -s -o /dev/null -w '%{http_code}
+' <the URL from flightboard.env>`
+
+**Every aircraft draws a tail fin**
+`frontend/logos.js` has not been generated. Debug mode says so outright on the
+logo line. See [Airline logos](#airline-logos-optional). This is a fallback, not
+a fault — the board is fine without it.
+
+**The generator says a source directory does not exist**
+Expected on a clean clone. `logo-sources/custom` and `logo-sources/fetched` are
+gitignored and hold artwork you supply. It skips them and carries on.
+
+**The TV shows an error page instead of the board**
+The cast URL is a hostname. A Chromecast pins itself to Google's DNS and ignores
+the resolver DHCP gives it, so names from your own router don't resolve on the
+stick. Use the IP address.
+
+**`catt` says "Casting…" but the TV shows nothing**
+That message means the receiver accepted the URL, not that the page loaded. Look
+at the TV, or ask the stick what it thinks it is showing:
+`journalctl -u flightboard-cast.service -n 5`
+
+**The cast watchdog runs but never re-casts**
+Almost always the device name. In the unit it must be **quoted**, because
+`Environment=` splits on spaces and an unquoted `Kitchen TV` sets the device to
+`Kitchen`. The watchdog now says so and fails the unit rather than passing
+quietly, so `systemctl status flightboard-cast` will tell you.
+
 **The board says "NO LOCATION"**
 `FLIGHTBOARD_HOME_LAT` / `_LON` aren't set, so home is `0.0, 0.0` in the
 Atlantic and nothing is ever nearby. The backend says the same thing on startup,
@@ -754,6 +932,45 @@ and doesn't cross VLANs. Some managed switches and access points block multicast
 **Everything works but the display never changes**
 Browsers throttle timers in background tabs. Make it the foreground tab, or use
 kiosk mode.
+
+---
+
+## Uninstalling
+
+Nothing here writes outside its own directory, `/etc/systemd/system`, and
+whatever you put in `/etc/sudoers.d`. Removing it is four commands.
+
+```bash
+sudo systemctl disable --now flightboard-cast.timer flightboard-backend
+sudo rm -f /etc/systemd/system/flightboard-backend.service            /etc/systemd/system/flightboard-cast.service            /etc/systemd/system/flightboard-cast.timer
+sudo systemctl daemon-reload
+rm -rf ~/flightboard
+```
+
+Four things inside that directory are yours rather than the project's, and are
+the four you would be annoyed to lose. Copy them out first if you might come
+back:
+
+| | |
+|---|---|
+| `flightboard.env` | your coordinates and receivers |
+| `filters.json` | what you hide |
+| `frontend/logos.js` | generated, and it can take real effort to reproduce |
+| `data/standing-data.sqlite` | rebuildable in seconds, so only for convenience |
+
+```bash
+mkdir -p ~/flightboard-keep
+cp flightboard.env filters.json frontend/logos.js ~/flightboard-keep/
+```
+
+Nothing is left behind. No files outside those paths, no cron entries, no
+packages beyond what you installed by hand — `git`, `python3-venv` and
+`python3-pil` if they were not already there. The Chromecast keeps showing the
+last page it was given until you stop the cast or it reboots:
+
+```bash
+.venv/bin/catt -d "YOUR-CHROMECAST" stop
+```
 
 ---
 
