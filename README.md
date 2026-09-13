@@ -486,10 +486,13 @@ What actually needs what:
 **`frontend/logos.js` does not arrive with a `git pull`.** It is generated from
 artwork you fetch locally and is gitignored, so when the generator changes your
 existing copy stays exactly as it was and the new marks never appear. That is
-the one update that isn't automatic:
+the one update that isn't automatic.
+
+Pull first. The generator's own tables ship in `tools/make_logos.py`, so running
+a newer command against an older generator quietly produces the older result:
 
 ```bash
-cd ~/flightboard
+cd ~/flightboard && git pull
 python3 tools/fetch_logo_art.py
 mkdir -p /tmp/logosrc && cd /tmp/logosrc
 curl -sL https://codeload.github.com/Jxck-S/airline-logos/tar.gz/refs/heads/main | tar -xz
@@ -500,7 +503,7 @@ python3 tools/make_logos.py logo-sources/custom logo-sources/fetched \
     /tmp/logosrc/airline-logos-main/radarbox_banners \
     /tmp/logosrc/airline-logos-main/avcodes_banners \
     --size 28 --out frontend/logos.js
-rm -rf /tmp/logosrc                    # ~150 MB of source artwork, no longer needed
+rm -rf /tmp/logosrc                    # 70 MB of source artwork, no longer needed
 ```
 
 Check the free space first if this is a long-running feeder Pi. No restart
@@ -663,7 +666,7 @@ rather than copied, and that does travel. What is left needs a local file:
 | carrier | what it needs |
 |---|---|
 | NYPD | their header logo from nyc.gov, which answers a plain client with 403 |
-| GPD | Tradewind's mark redrawn by hand at 28×28, since no reduction of it works |
+| GPD | Tradewind's mark redrawn by hand at 28×28, since no reduction of it works. Named in `REQUIRE_SOURCE`, so without the file it draws a tail fin rather than the archive's version, which lights every LED in the tile |
 
 Run the generator and it reports any table entry it could not satisfy.
 
@@ -676,6 +679,7 @@ All one-line entries at the top of `tools/make_logos.py`:
 | `BACKGROUND` | force a carrier onto black or onto a light tile |
 | `CROPS` | use a square region of a wider logo |
 | `PREFER_SOURCE` | prefer one archive directory's version over another's |
+| `REQUIRE_SOURCE` | accept a carrier's artwork **only** from one directory, and draw a fin otherwise |
 | `PREFER_TAIL_FIN` | reject the artwork outright and draw a fin instead |
 | `KNOCK_COLOURED_BG` | strip a solid colour background |
 | `LIGHT_INK_VALUE` / `LIGHT_INK_SAT` | where the automatic light/dark decision sits |
@@ -694,7 +698,9 @@ deciding on value sends 6%.
 ### Hand-drawing a mark
 
 A 28×28 source is passed through untouched, so a mark drawn at exactly that size
-bypasses the fitting entirely. Worth knowing, because for some logos nothing
+bypasses the fitting entirely. Pair it with a `REQUIRE_SOURCE` entry, or the
+generator will quietly take the archive's version when yours is absent and
+report nothing wrong — it did, after all, find artwork. Worth knowing, because for some logos nothing
 else works: Tradewind's survived being redrawn by hand and survived no reduction
 at all. This is the same reason the panel uses a real bitmap font rather than a
 rasterised webfont.

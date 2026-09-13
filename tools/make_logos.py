@@ -128,6 +128,20 @@ PREFER_TAIL_FIN = {
     "SGX",   # Slate Aviation - fine line art on white
 }
 
+# Carriers where only one directory's artwork is acceptable and everything else
+# is worse than nothing.
+#
+# PREFER_SOURCE promotes a directory; this one *requires* it. The difference
+# matters when the archive also carries the carrier: without this, dropping the
+# good file simply falls through to the archive's version and the generator has
+# nothing to complain about, because it did find artwork. Tradewind is the case
+# that proves it - hand-drawn it is 96 lit LEDs on black, and from the archive
+# it is all 784 of them lit, which is the glaring white tile this project
+# exists to avoid.
+REQUIRE_SOURCE = {
+    "GPD": "custom",     # Tradewind - redrawn by hand at 28x28; see build()
+}
+
 # Carriers with no usable square mark, where a square region of a wider logo
 # works instead. The fractions are (x0, y0, x1, y1) of that specific directory's
 # artwork, squared about their centre, so the directory is named alongside them.
@@ -370,7 +384,22 @@ def main():
         if paths:
             paths.sort(key=lambda p: os.path.basename(os.path.dirname(p)) != wanted)
 
+    for code, wanted in REQUIRE_SOURCE.items():                # or nothing at all
+        paths = candidates.get(code)
+        if paths:
+            kept = [p for p in paths
+                    if os.path.basename(os.path.dirname(p)) == wanted]
+            if kept:
+                candidates[code] = kept
+            else:
+                del candidates[code]
+                print(f"note: {code} is only accepted from {wanted!r}, which has no "
+                      f"artwork for it - falling back to a tail fin", file=sys.stderr)
+
     given = {os.path.basename(os.path.normpath(d)) for d in args.src}
+    # REQUIRE_SOURCE is deliberately not in this check. For the other two, a
+    # directory you did not pass means the entry is inert; for that one it means
+    # the carrier is refused, which it reports itself and much more usefully.
     for table, label in ((CROPS, "CROPS"), (PREFER_SOURCE, "PREFER_SOURCE")):
         for code, value in table.items():
             wanted = value[0] if isinstance(value, tuple) else value
