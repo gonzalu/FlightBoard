@@ -402,7 +402,8 @@ find. Use that name exactly — you need it again in step 2 — and cast to it:
 casting something else and stopping.
 
 ```bash
-python3 tools/make-units.py cast --device "YOUR-CHROMECAST" --url "http://YOUR-SERVER-IP:8090/"     | sudo tee /etc/systemd/system/flightboard-cast.service
+python3 tools/make-units.py cast --device "YOUR-CHROMECAST" --url "http://YOUR-SERVER-IP:8090/" \
+    | sudo tee /etc/systemd/system/flightboard-cast.service
 sudo cp flightboard-cast.timer /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now flightboard-cast.timer
@@ -621,59 +622,64 @@ the part that reads at this size.
 
 ### Carrying your own artwork between machines
 
-`logo-sources/` is gitignored, which is what keeps trademarked artwork out of
-this repository. It also means nothing stops you keeping your own artwork in a
-repository of your own, which is how you get the same board on a second machine
-without copying files around by hand.
+Hand-supplied artwork stays on the machine it was made on, because
+`logo-sources/` is gitignored. Keeping it in a private repository of your own
+means a second board is one clone away instead of a pile of `scp`.
 
-Set it up once, from the machine that already has the artwork. That directory
-sits inside your checkout but is gitignored, so a repository of its own nested
-there is fine and is the point:
+**1. Create a private repository.** Anywhere you like; GitHub's own
+[Create a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-new-repository)
+walks through it. Name it whatever you want. Tick **Private**, and do not add a
+README — an empty repository is what the next step wants.
+
+**2. Upload the artwork to the top level of it.** Drag the files onto the
+repository page in a browser and commit. Files must sit in the **root**, not in
+a folder: the generator lists one directory and does not look inside
+subdirectories.
+
+**3. On each board, clone it into place before generating.**
+
+```bash
+cd ~/flightboard
+git clone https://github.com/YOUR-GITHUB-USER/YOUR-LOGO-REPO.git logo-sources/custom
+```
+
+Then run the generator as normal. It looks there first, so the board comes out
+identical to the one the artwork was made on. A private repository asks for
+credentials the first time.
+
+To update the artwork later, change it in the repository, then `git pull` inside
+`logo-sources/custom` and regenerate.
+
+<details><summary>Doing it from the command line instead</summary>
+
+The directory is inside your checkout but gitignored, so a repository of its own
+nested there is expected rather than a mistake.
 
 ```bash
 cd ~/flightboard/logo-sources/custom
 git init && git add . && git commit -m "artwork for my board"
+gh repo create YOUR-LOGO-REPO --private --source=. --push
 ```
 
-Then create the remote. On github.com, **New repository**, private, no README —
-an empty one, or the push below is refused:
+`--source` wants a repository that already exists, so the `git init` comes
+first. Without the GitHub CLI, create the empty repository in a browser and
+finish with `git remote add origin …` and `git push -u origin main`.
+</details>
 
-```bash
-git remote add origin git@github.com:YOU/my-flightboard-logos.git
-git branch -M main && git push -u origin main
-```
+**Keep the repository private.** Moving trademarked artwork somewhere else does
+not change what it is, and police, ambulance and government insignia carry
+restrictions of their own on top of ordinary trademark. Private costs nothing,
+works the same, and is the difference between storing something and publishing
+it.
 
-With the GitHub CLI installed, the last two steps collapse into one. Note the
-order: `--source` expects a repository that already exists, so the `git init`
-above still comes first.
-
-```bash
-gh repo create my-flightboard-logos --private --source=. --push
-```
-
-Then on every new install, before generating:
-
-```bash
-git clone git@github.com:YOU/my-flightboard-logos.git logo-sources/custom
-```
-
-The generator already looks there first, so that clone plus the normal command
-gives you an identical board.
-
-On a machine that is not yours to log into as yourself, add a **read-only deploy
-key** to that repository — one key per machine, revocable individually, and it
-grants nothing but read access to that one repo:
+On a machine you cannot log into as yourself, add a **read-only deploy key** to
+the repository — one per machine, revocable individually, granting nothing but
+read access to that one repository:
 
 ```bash
 ssh-keygen -t ed25519 -f ~/.ssh/flightboard-logos -N ""
 cat ~/.ssh/flightboard-logos.pub          # paste into Settings → Deploy keys
 ```
-
-**Keep that repository private.** Moving trademarked artwork somewhere else does
-not change what it is, and police, ambulance and government insignia carry
-restrictions of their own on top of ordinary trademark. Private costs you
-nothing, works exactly the same, and is the difference between storing something
-and publishing it.
 
 ### What a clean clone cannot reproduce
 
@@ -996,7 +1002,9 @@ whatever you put in `/etc/sudoers.d`. Removing it is four commands.
 
 ```bash
 sudo systemctl disable --now flightboard-cast.timer flightboard-backend
-sudo rm -f /etc/systemd/system/flightboard-backend.service            /etc/systemd/system/flightboard-cast.service            /etc/systemd/system/flightboard-cast.timer
+sudo rm -f /etc/systemd/system/flightboard-backend.service \
+           /etc/systemd/system/flightboard-cast.service \
+           /etc/systemd/system/flightboard-cast.timer
 sudo systemctl daemon-reload
 rm -rf ~/flightboard
 ```
