@@ -118,7 +118,15 @@ const Debug = (() => {
 
     // logo - reported by drawLogo, not guessed at
     const L = snap.logo || {};
-    lines.push(`logo        ` + (L.key
+    // With no logos.js at all every aircraft draws a fin, and blaming the
+    // operator code for it sends the reader hunting the wrong problem: on a
+    // fresh install the real answer is that the table was never generated.
+    const noTable = typeof LOGOS === 'undefined';
+    lines.push(`logo        ` + (noTable
+      ? `${L.key ? L.key + ' from ' + L.via + ', but ' : ''}no logo table loaded ` +
+        `- frontend/logos.js has not been generated, so every aircraft draws a ` +
+        `tail fin. See "Airline logos" in the README.`
+      : L.key
       ? `${L.key} from ${L.via}` +
         (L.alias ? ` (alias of ${L.alias})` : '') +
         `   drew ${L.how}`
