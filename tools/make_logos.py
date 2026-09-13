@@ -212,7 +212,7 @@ def lift_ink(img):
     """Brighten dark ink so it reads on black, preserving hue and saturation."""
     alpha = img.split()[-1]
     h, s, v = img.convert("RGB").convert("HSV").split()
-    vals = [p for p, a in zip(v.getdata(), alpha.getdata()) if a >= 128]
+    vals = [p for p, a in zip(pixels(v), pixels(alpha)) if a >= 128]
     if not vals:
         return img
     mean_v = sum(vals) / len(vals)
@@ -232,12 +232,23 @@ def lift_ink(img):
     return out
 
 
+def pixels(img):
+    """Every pixel of an image, as a flat sequence.
+
+    Pillow 14 (October 2027) removes Image.getdata() in favour of
+    get_flattened_data(). Raspberry Pi OS still ships a Pillow that has only
+    the old one, so take whichever exists rather than pinning a version a Pi
+    cannot install.
+    """
+    return (getattr(img, "get_flattened_data", None) or img.getdata)()
+
+
 def ink_stats(img):
     """Mean HSV value and saturation of the opaque pixels, and their coverage."""
     _, s, v = img.convert("RGB").convert("HSV").split()
     alpha = img.split()[-1]
     total = val = sat = 0
-    for sv, vv, a in zip(s.getdata(), v.getdata(), alpha.getdata()):
+    for sv, vv, a in zip(pixels(s), pixels(v), pixels(alpha)):
         if a >= 128:
             total += 1
             val += vv
@@ -260,8 +271,8 @@ def encode(img, size, on_light):
     palette = [(raw[i * 3] << 16) | (raw[i * 3 + 1] << 8) | raw[i * 3 + 2]
                for i in range(len(raw) // 3)]
 
-    idx = list(q.getdata())
-    alpha = list(img.split()[-1].getdata())
+    idx = list(pixels(q))
+    alpha = list(pixels(img.split()[-1]))
     top = len(palette)
     chars = []
     for i, a in enumerate(alpha):
@@ -340,6 +351,13 @@ def main():
     # code -> candidate paths, in the order the directories were given
     candidates = {}
     for directory in args.src:
+        # logo-sources/custom and logo-sources/fetched are gitignored, so a
+        # clean clone has neither and the documented command names both. Say
+        # so and carry on: a stack trace here taught nobody anything.
+        if not os.path.isdir(directory):
+            print(f"note: {directory} does not exist, skipping it",
+                  file=sys.stderr)
+            continue
         for name in sorted(os.listdir(directory)):
             stem, ext = os.path.splitext(name)
             if ext.lower() not in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
