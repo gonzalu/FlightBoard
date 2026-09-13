@@ -101,15 +101,15 @@ def aircraft(hexid):
     try:
         row = db.execute(
             "SELECT registration, model, manufacturer, operator, airline_code, "
-            "year_built FROM aircraft WHERE icao = ?", (hexid.strip().upper(),)
-        ).fetchone()
+            "year_built, type_code FROM aircraft WHERE icao = ?",
+            (hexid.strip().upper(),)).fetchone()
     except Exception as e:
         log.debug("aircraft lookup failed for %s: %s", hexid, e)
         return None
     if not row:
         return None
     keys = ("registration", "model", "manufacturer", "operator", "airline_code",
-            "year_built")
+            "year_built", "type_code")
     return {k: (v or None) for k, v in zip(keys, row)}
 
 
@@ -145,3 +145,22 @@ def stats():
         except Exception:
             pass
     return out
+
+
+def species(type_code):
+    """ICAO species letter for a type designator: H helicopter, G gyrocopter,
+    L landplane, A amphibian, S seaplane, T tiltwing. None if unknown.
+
+    This is the only honest way to know a helicopter. Model names do not say:
+    "407" is a Bell helicopter and "737" is not, and no rule separates them.
+    ICAO doc 8643 does say, and Virtual Radar Server publishes the table.
+    """
+    db = _db()
+    if not db or not type_code:
+        return None
+    try:
+        row = db.execute("SELECT species FROM model_types WHERE type_code = ?",
+                         (type_code.strip().upper(),)).fetchone()
+    except Exception:
+        return None
+    return (row[0] or None) if row else None

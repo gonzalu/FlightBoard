@@ -43,7 +43,13 @@ SCHEMA = """
     CREATE TABLE airlines    (icao TEXT PRIMARY KEY, name TEXT);
     CREATE TABLE aircraft    (icao TEXT PRIMARY KEY, registration TEXT, model TEXT,
                               manufacturer TEXT, operator TEXT, airline_code TEXT,
-                              year_built TEXT);
+                              year_built TEXT, type_code TEXT);
+    -- ICAO doc 8643 type designators. SpeciesCode is the reason this is here:
+    -- 'H' means helicopter, which is otherwise not derivable from a model name
+    -- without a regex that would be wrong in both directions.
+    CREATE TABLE model_types (type_code TEXT PRIMARY KEY, manufacturer TEXT,
+                              model TEXT, species TEXT, engines TEXT,
+                              engine_type TEXT, wtc TEXT);
     CREATE TABLE code_blocks (start INTEGER, finish INTEGER, country TEXT,
                               military INTEGER);
     CREATE INDEX code_blocks_start ON code_blocks (start, finish);
@@ -74,7 +80,8 @@ def main():
         os.remove(tmp)
     db = sqlite3.connect(tmp)
     db.executescript(SCHEMA)
-    counts = {k: 0 for k in ("routes", "airports", "airlines", "aircraft", "code_blocks")}
+    counts = {k: 0 for k in ("routes", "airports", "airlines", "aircraft",
+                             "code_blocks", "model_types")}
 
     # Each table is a pile of small CSVs sharded by prefix, so stream the
     # tarball once and dispatch by path rather than extracting to disk first.
@@ -90,11 +97,20 @@ def main():
         "airlines/": ("airlines", "INSERT OR REPLACE INTO airlines VALUES (?,?)",
                       lambda r: (r["ICAO"].strip().upper(), r["Name"])
                       if r.get("ICAO") and r.get("Name") else None),
-        "aircraft/": ("aircraft", "INSERT OR REPLACE INTO aircraft VALUES (?,?,?,?,?,?,?)",
+        "aircraft/": ("aircraft", "INSERT OR REPLACE INTO aircraft VALUES (?,?,?,?,?,?,?,?)",
                       lambda r: (r["ICAO"].strip().upper(), r["Registration"],
                                  r["Model"], r["Manufacturer"], r["Operator"],
                                  (r["AirlineCode"] or "").strip().upper(),
-                                 r["YearBuilt"]) if r.get("ICAO") else None),
+                                 r["YearBuilt"],
+                                 (r.get("ModelICAO") or "").strip().upper())
+                      if r.get("ICAO") else None),
+        "model-type/": ("model_types",
+                        "INSERT OR REPLACE INTO model_types VALUES (?,?,?,?,?,?,?)",
+                        lambda r: (r["ICAO"].strip().upper(), r["Manufacturer"],
+                                   r["Model"], (r.get("SpeciesCode") or "").strip().upper(),
+                                   r.get("Engines"), r.get("EngineTypeCode"),
+                                   r.get("WakeTurbulenceCode"))
+                        if r.get("ICAO") else None),
         "code-blocks/": ("code_blocks", "INSERT INTO code_blocks VALUES (?,?,?,?)",
                          lambda r: (int(r["Start"], 16), int(r["Finish"], 16),
                                     r["CountryISO2"], 1 if r["IsMilitary"] == "1" else 0)

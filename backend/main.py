@@ -142,6 +142,7 @@ def _parse_aircraft(body):
     return {
         "registration": ac.get("registration"),
         "type": ac.get("type"),
+        "type_code": (ac.get("icao_type") or "").strip().upper() or None,
         "manufacturer": ac.get("manufacturer"),
         # adsbdb carries these too, and taking them here means an aircraft is
         # named and badged even when hexdb has never heard of its hex.
@@ -184,6 +185,7 @@ def _parse_hexdb_aircraft(body):
     return {
         "registration": body.get("Registration"),
         "type": _ascii(body.get("Type")),
+        "type_code": (body.get("ICAOTypeCode") or "").strip().upper() or None,
         "manufacturer": _ascii(body.get("Manufacturer")),
         "owner": _ascii(body.get("RegisteredOwners")),
         # The operator's ICAO code, which is how an aircraft with no airline
@@ -252,6 +254,7 @@ def _vrs_aircraft(hexid):
     return {
         "registration": raw.get("registration"),
         "type": _ascii(model),
+        "type_code": raw.get("type_code"),
         "manufacturer": _ascii(maker),
         "owner": _ascii(raw.get("operator")),
         "operator_code": raw.get("airline_code"),
@@ -549,6 +552,13 @@ def _entry(ac):
             dbg["type"] = _enrich_meta(f"type:{entry['hex']}")
             info = _enrichment(f"type:{entry['hex']}")
             if info:
+                # Derived, not merged: whichever source supplied the type code,
+                # the species comes from one authoritative table. A helicopter
+                # is not guessable from a model name - "407" is a Bell and
+                # "737" is a Boeing, and nothing in the strings says which.
+                sp = routes_db.species(info.get("type_code"))
+                if sp:
+                    info = dict(info, species=sp)
                 reg = (info.get("registration") or "").upper()
                 if reg and reg in rules.registrations:
                     return None

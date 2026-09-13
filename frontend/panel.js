@@ -207,7 +207,7 @@ function drawWordmark(box, text, color) {
 // re-derived: a second copy of this decision would drift and then mislead.
 let lastLogo = {};
 
-function drawLogo(box, key, base, accent) {
+function drawLogo(box, key, base, accent, rotary) {
   const words = wordmarkFor(key);
   if (words) {
     lastLogo.how = 'wordmark';
@@ -216,8 +216,13 @@ function drawLogo(box, key, base, accent) {
   }
   const logo = typeof LOGOS !== 'undefined' && key ? LOGOS[key] : null;
   if (!logo) {
-    lastLogo.how = 'tail fin (no mark held)';
-    drawFin(box, base, accent);
+    if (rotary) {
+      lastLogo.how = 'helicopter (no mark held)';
+      drawHelicopter(box, base, accent);
+    } else {
+      lastLogo.how = 'tail fin (no mark held)';
+      drawFin(box, base, accent);
+    }
     return;
   }
   lastLogo.how = 'pixel mark';
@@ -230,6 +235,77 @@ function drawLogo(box, key, base, accent) {
     const pi = (ch <= 57 ? ch - 48 : ch - 87) - 1; // 0-9 then a-f
     setPx(ox + (i % s), oy + ((i / s) | 0), logo.p[pi]);
   }
+}
+
+/*
+ * A helicopter, drawn instead of a tail fin when the aircraft is a rotorcraft.
+ *
+ * A swept fin says "airliner" as loudly as it says "no logo", and over a city
+ * that is wrong a good part of the time: police, air ambulance, news and tour
+ * traffic is most of what flies low and slow, and almost none of it has a mark.
+ *
+ * Drawn as a side view because that is the only angle where a helicopter is
+ * unmistakable at this size. The recognisable part is not the cabin, it is the
+ * relationship between a long thin rotor, a small body and a boom reaching
+ * away from it - earlier attempts with a bigger cabin read as a submarine.
+ *
+ * '#' takes the operator's base colour, '+' the accent, which puts the colour
+ * on the tail fin where an airline would brand it.
+ */
+const HELICOPTER = [
+  '............................',
+  '............................',
+  '............................',
+  '............................',
+  '............................',
+  '............................',
+  '.##########################.',
+  '.##########################.',
+  '........##..................',
+  '........##..................',
+  '........##...........+++....',
+  '.......#####.........+++....',
+  '.....#########.......+++....',
+  '....###########......+++....',
+  '...#################+++.....',
+  '...#################+++.....',
+  '...#################+++.....',
+  '....###########.............',
+  '.....#########..............',
+  '.......#####................',
+  '...#........#...............',
+  '...#........#...............',
+  '################............',
+  '............................',
+  '............................',
+  '............................',
+  '............................',
+  '............................',
+];
+
+function drawHelicopter(box, base, accent) {
+  for (let r = 0; r < HELICOPTER.length; r++) {
+    for (let c = 0; c < HELICOPTER[r].length; c++) {
+      const ch = HELICOPTER[r][c];
+      if (ch === '#') setPx(box.x + c, box.y + r, base);
+      else if (ch === '+') setPx(box.x + c, box.y + r, accent);
+    }
+  }
+}
+
+/**
+ * Is this a rotorcraft?
+ *
+ * Two independent answers, because neither alone is enough. The ADS-B emitter
+ * category is the aircraft's own claim and is often absent. The species comes
+ * from ICAO doc 8643 via the local database, keyed on the type designator, and
+ * is exact when we have a type at all. Nothing in a model *name* can be used:
+ * "407" is a Bell helicopter and "737" is a Boeing, and no rule separates them.
+ */
+function isRotorcraft(ac, info) {
+  if (ac.category === 'A7') return true;         // ADS-B emitter category: rotorcraft
+  const sp = info && info.species;
+  return sp === 'H' || sp === 'G';               // helicopter or gyrocopter
 }
 
 // A swept vertical stabilizer, drawn whenever there's no logo for the carrier.
@@ -622,7 +698,7 @@ function buildFlightFrame(ac, page) {
     const [base, accent] =
       (typeof AIRLINE_COLORS !== 'undefined' && AIRLINE_COLORS[key])
       || (identity ? hashColors(identity) : [0x243039, 0x51707f]);
-    drawLogo(M.logo, key, base, accent);
+    drawLogo(M.logo, key, base, accent, isRotorcraft(ac, info));
   }
 
   const availW = W - TEXT_X - M.padX;

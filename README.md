@@ -46,6 +46,7 @@ uses, and every dot you see is an individually addressed LED.
   * [Hiding traffic you don't want](#hiding-traffic-you-dont-want)
   * [Customising the logos](#customising-the-logos)
   * [Configuration reference](#configuration-reference)
+  * [Helicopters](#helicopters)
   * [The direction arrow](#the-direction-arrow)
   * [How it works](#how-it-works)
   * [Debug mode](#debug-mode)
@@ -274,7 +275,8 @@ needs, and what it doesn't.
 
 ## Airline logos (optional)
 
-Out of the box, carriers are drawn as a swept tail fin in their brand colours.
+Out of the box, carriers are drawn as a swept tail fin in their brand colours,
+or as a helicopter if the aircraft is a rotorcraft.
 That is a deliberate fallback, not a broken state, and a board that never runs
 this section still looks finished.
 
@@ -826,6 +828,32 @@ you *hide* is separate, and lives in `filters.json` — see
 Display behaviour lives in `CFG` at the top of `frontend/panel.js`: `PAGE_MS`
 (how long each bottom page holds), `MAX_FLIGHTS` (how many aircraft to cycle
 through), `SKIP_GROUND` (whether to include aircraft on the ground).
+
+---
+
+### Helicopters
+
+An aircraft with no logo is drawn as a swept tail fin, which says "airliner" as
+loudly as it says "no logo". Over a city that is wrong a good part of the time,
+because police, air ambulance, news and tour traffic is most of what flies low
+and slow and almost none of it has a mark. Those get a helicopter instead, in
+the same operator-hashed colours.
+
+Two independent tests, because neither alone is enough:
+
+- The **ADS-B emitter category**, where `A7` is the aircraft's own claim to be a
+  rotorcraft. Authoritative when present, and frequently absent.
+- The **ICAO species** from doc 8643, keyed on the type designator and carried
+  in the local database as `model_types.species`. `H` is a helicopter and `G` a
+  gyrocopter. Exact whenever any source gives us a type code at all, and all
+  three do.
+
+Nothing is inferred from a model *name*, because nothing can be: "407" is a Bell
+helicopter and "737" is a Boeing, and no rule tells them apart. Of the 16,873
+airframes in the local database, 693 are helicopters by this test.
+
+A rotorcraft that *does* have a mark still gets its mark. The helicopter is a
+fallback, exactly like the fin.
 
 ---
 
