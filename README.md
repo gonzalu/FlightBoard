@@ -294,16 +294,18 @@ python3 tools/make_logos.py \
     /tmp/logosrc/airline-logos-main/radarbox_logos \
     /tmp/logosrc/airline-logos-main/radarbox_banners \
     /tmp/logosrc/airline-logos-main/avcodes_banners \
+    /tmp/logosrc/airline-logos-main/fr24_banners \
     --size 28 --out frontend/logos.js
 rm -rf /tmp/logosrc                    # 70 MB of source artwork, no longer needed
 ```
 
-About a minute, even on a Pi 3, for roughly 3,100 marks and 2.7 MB. No restart
+About a minute, even on a Pi 3, for roughly 3,135 marks and 2.8 MB. No restart
 needed: the frontend fingerprint changes and every display picks it up itself.
 
-`avcodes_banners` is last on purpose. It is the biggest directory and the lowest
-priority, so it only fills gaps: adding it gains about 1,450 carriers and changes
-not one mark the other three already produced.
+The last two directories are last on purpose. They are the lowest priority, so
+they only fill gaps: `avcodes_banners` gains about 1,450 carriers and
+`fr24_banners` another 35, and between them they change not one mark the first
+three already produced.
 
 The first two directories hold hand-supplied and hand-fetched artwork. Neither
 ships in a clone, and the generator says so and carries on when they are
@@ -506,6 +508,7 @@ python3 tools/make_logos.py logo-sources/custom logo-sources/fetched \
     /tmp/logosrc/airline-logos-main/radarbox_logos \
     /tmp/logosrc/airline-logos-main/radarbox_banners \
     /tmp/logosrc/airline-logos-main/avcodes_banners \
+    /tmp/logosrc/airline-logos-main/fr24_banners \
     --size 28 --out frontend/logos.js
 rm -rf /tmp/logosrc                    # 70 MB of source artwork, no longer needed
 ```

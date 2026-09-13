@@ -106,6 +106,11 @@ KNOCK_COLOURED_BG = set()
 # logo-sources/custom matters: that directory is gitignored, so a copy does not
 # travel and the board stops reproducing from a clean clone.
 PREFER_SOURCE = {
+    # Jet Edge: its avcodes banner is a solid dark field that letterboxes into a
+    # lit bar across the tile. fr24 has the roundel, which is what CROPS below
+    # takes - but avcodes comes first in the source order, so it has to be
+    # promoted or the crop never sees the right file.
+    "EDG": "fr24_banners",
     # flightaware_logos files the same navy tail under both ICE and FXI, so
     # Icelandair and Air Iceland came out identical. radarbox has the real
     # livery, blue with the gold flag swoosh.
@@ -180,6 +185,10 @@ CROPS = {
     # image in avcodes_banners all along - so it now travels with the repo and
     # needs nothing local.
     "VJA": ("avcodes_banners", (0.000, 0.020, 0.179, 0.530)),
+    # Jet Edge. Its avcodes banner is a solid dark field that letterboxes into a
+    # lit bar; fr24's has the roundel beside the wordmark, with a clean gap at
+    # column 44 of 129, and the roundel is very nearly square already.
+    "EDG": ("fr24_banners", (0.000, 0.000, 0.349, 1.000)),
 }
 
 # Worth recording a thing that did NOT work, so nobody spends the afternoon on
