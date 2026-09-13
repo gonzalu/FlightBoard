@@ -626,12 +626,29 @@ this repository. It also means nothing stops you keeping your own artwork in a
 repository of your own, which is how you get the same board on a second machine
 without copying files around by hand.
 
-Set it up once, from a machine that already has the artwork:
+Set it up once, from the machine that already has the artwork. That directory
+sits inside your checkout but is gitignored, so a repository of its own nested
+there is fine and is the point:
 
 ```bash
 cd ~/flightboard/logo-sources/custom
-gh repo create my-flightboard-logos --private --source=. --remote=origin
-git init && git add . && git commit -m "artwork for my board" && git push -u origin main
+git init && git add . && git commit -m "artwork for my board"
+```
+
+Then create the remote. On github.com, **New repository**, private, no README —
+an empty one, or the push below is refused:
+
+```bash
+git remote add origin git@github.com:YOU/my-flightboard-logos.git
+git branch -M main && git push -u origin main
+```
+
+With the GitHub CLI installed, the last two steps collapse into one. Note the
+order: `--source` expects a repository that already exists, so the `git init`
+above still comes first.
+
+```bash
+gh repo create my-flightboard-logos --private --source=. --push
 ```
 
 Then on every new install, before generating:
