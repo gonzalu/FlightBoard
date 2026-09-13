@@ -150,10 +150,11 @@ CROPS = {
     # only the letters gives a mark that still reads at 28px.
     "NYPD": ("custom", (0.312, 0.28, 1.00, 0.71)),
     # Vista America: "VISTA AMERICA" set wide and thin is hopeless at this size,
-    # but the red V opening it is a mark in its own right. Hand-copied into
-    # logo-sources/custom from the archive's avcodes_banners, which is not in
-    # the default source list - see the note in fetch_logo_art.py about why.
-    "VJA": ("custom", (0.000, 0.020, 0.179, 0.530)),
+    # but the red V opening it is a mark in its own right. This used to want a
+    # hand-copied file, until the archive turned out to carry the identical
+    # image in avcodes_banners all along - so it now travels with the repo and
+    # needs nothing local.
+    "VJA": ("avcodes_banners", (0.000, 0.020, 0.179, 0.530)),
 }
 
 # Worth recording a thing that did NOT work, so nobody spends the afternoon on

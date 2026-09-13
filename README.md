@@ -285,12 +285,22 @@ python3 tools/fetch_logo_art.py        # three marks the bulk archive does badly
 mkdir -p /tmp/logosrc && cd /tmp/logosrc
 curl -sL https://codeload.github.com/Jxck-S/airline-logos/tar.gz/refs/heads/main | tar -xz
 cd ~/flightboard
-python3 tools/make_logos.py     logo-sources/custom logo-sources/fetched     /tmp/logosrc/airline-logos-main/flightaware_logos     /tmp/logosrc/airline-logos-main/radarbox_logos     /tmp/logosrc/airline-logos-main/radarbox_banners     --size 28 --out frontend/logos.js
+python3 tools/make_logos.py \
+    logo-sources/custom logo-sources/fetched \
+    /tmp/logosrc/airline-logos-main/flightaware_logos \
+    /tmp/logosrc/airline-logos-main/radarbox_logos \
+    /tmp/logosrc/airline-logos-main/radarbox_banners \
+    /tmp/logosrc/airline-logos-main/avcodes_banners \
+    --size 28 --out frontend/logos.js
 rm -rf /tmp/logosrc                    # 70 MB of source artwork, no longer needed
 ```
 
-About a minute, even on a Pi 3. No restart needed: the frontend fingerprint
-changes and every display picks it up by itself.
+About a minute, even on a Pi 3, for roughly 3,100 marks and 2.7 MB. No restart
+needed: the frontend fingerprint changes and every display picks it up itself.
+
+`avcodes_banners` is last on purpose. It is the biggest directory and the lowest
+priority, so it only fills gaps: adding it gains about 1,450 carriers and changes
+not one mark the other three already produced.
 
 The first two directories hold hand-supplied and hand-fetched artwork. Neither
 ships in a clone, and the generator says so and carries on when they are
@@ -488,6 +498,7 @@ python3 tools/make_logos.py logo-sources/custom logo-sources/fetched \
     /tmp/logosrc/airline-logos-main/flightaware_logos \
     /tmp/logosrc/airline-logos-main/radarbox_logos \
     /tmp/logosrc/airline-logos-main/radarbox_banners \
+    /tmp/logosrc/airline-logos-main/avcodes_banners \
     --size 28 --out frontend/logos.js
 rm -rf /tmp/logosrc                    # ~150 MB of source artwork, no longer needed
 ```
@@ -609,19 +620,40 @@ the part that reads at this size.
 
 `logo-sources/` is gitignored, which is what keeps trademarked artwork out of
 this repository. It also means nothing stops you keeping your own artwork in a
-repository of your own:
+repository of your own, which is how you get the same board on a second machine
+without copying files around by hand.
+
+Set it up once, from a machine that already has the artwork:
 
 ```bash
-git clone git@github.com:you/my-flightboard-logos.git logo-sources/custom
+cd ~/flightboard/logo-sources/custom
+gh repo create my-flightboard-logos --private --source=. --remote=origin
+git init && git add . && git commit -m "artwork for my board" && git push -u origin main
 ```
 
-Then regenerate. The generator already looks there first, so a second board
-gets your marks with one clone instead of a pile of `scp`.
+Then on every new install, before generating:
+
+```bash
+git clone git@github.com:YOU/my-flightboard-logos.git logo-sources/custom
+```
+
+The generator already looks there first, so that clone plus the normal command
+gives you an identical board.
+
+On a machine that is not yours to log into as yourself, add a **read-only deploy
+key** to that repository — one key per machine, revocable individually, and it
+grants nothing but read access to that one repo:
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/flightboard-logos -N ""
+cat ~/.ssh/flightboard-logos.pub          # paste into Settings → Deploy keys
+```
 
 **Keep that repository private.** Moving trademarked artwork somewhere else does
 not change what it is, and police, ambulance and government insignia carry
 restrictions of their own on top of ordinary trademark. Private costs you
-nothing and is exactly as convenient.
+nothing, works exactly the same, and is the difference between storing something
+and publishing it.
 
 ### What a clean clone cannot reproduce
 
@@ -631,7 +663,6 @@ rather than copied, and that does travel. What is left needs a local file:
 | carrier | what it needs |
 |---|---|
 | NYPD | their header logo from nyc.gov, which answers a plain client with 403 |
-| VJA | Vista America's banner from the archive's `avcodes_banners`, a directory this project does not pass |
 | GPD | Tradewind's mark redrawn by hand at 28×28, since no reduction of it works |
 
 Run the generator and it reports any table entry it could not satisfy.
