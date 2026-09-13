@@ -299,6 +299,126 @@ function drawFin(box, base, accent) {
 
 /* ---------- value formatting, matching the device's readout style ---------- */
 
+/* ---------- direction arrow ---------- */
+
+/*
+ * A single glyph at the end of line 2 saying which way the aircraft is going in
+ * both dimensions at once: climbing or descending, and towards you or away.
+ *
+ * Eight of the nine states come from two three-way decisions, so they are
+ * generated rather than drawn: the four cardinals are lifted straight out of
+ * glcdfont, which already has them, and the four diagonals are mirrored from a
+ * single authored glyph so they cannot disagree with each other.
+ *
+ * 5x7 is not a choice. Mixing a bigger diagonal with the font's own cardinals
+ * would look like two different sets, so the font settles the size.
+ */
+
+// The one diagonal actually drawn by hand. 10 lit pixels, which is what the
+// font's own up arrow weighs - anything heavier reads as a blob beside it.
+const ARROW_UP_RIGHT = [
+  '.....',
+  '.####',
+  '...##',
+  '..#.#',
+  '.#...',
+  '#....',
+  '.....',
+];
+
+// Holding station. Deliberately heavier than the arrows at 21 lit pixels: an
+// aircraft going nowhere is a different kind of state, not a ninth direction,
+// and the tall rectangle echoes the shape of the cell it sits in. 'R' is the
+// red centre.
+const ARROW_HOVER = [
+  '#####',
+  '#...#',
+  '#...#',
+  '#.R.#',
+  '#...#',
+  '#...#',
+  '#####',
+];
+
+const ARROW_RED = 0xff3524;
+
+/** A 5x7 glyph out of the vendored font table, as row strings. */
+function fontGlyph(code) {
+  const rows = [];
+  for (let y = 0; y < 7; y++) {
+    let r = '';
+    for (let x = 0; x < 5; x++) r += ((GLCD_FONT[code * 5 + x] >> y) & 1) ? '#' : '.';
+    rows.push(r);
+  }
+  return rows;
+}
+
+const flipX = g => g.map(r => [...r].reverse().join(''));
+const flipY = g => [...g].reverse();
+
+const ARROWS = {
+  up:        fontGlyph(0x18),
+  down:      fontGlyph(0x19),
+  right:     fontGlyph(0x1a),
+  left:      fontGlyph(0x1b),
+  upright:   ARROW_UP_RIGHT,
+  upleft:    flipX(ARROW_UP_RIGHT),
+  downright: flipY(ARROW_UP_RIGHT),
+  downleft:  flipY(flipX(ARROW_UP_RIGHT)),
+  hover:     ARROW_HOVER,
+};
+
+const ARROW_W = 5, ARROW_H = 7;
+
+// Feet per minute past which an aircraft is going somewhere vertically rather
+// than riding bumps, and knots below which it has no meaningful direction at
+// all - a helicopter holding over a scene, or a police unit orbiting so slowly
+// that its track means nothing.
+const ARROW_CLIMB_FPM = 300;
+const ARROW_HOVER_KT = 30;
+
+/**
+ * Is it coming towards you? Compare its track against the bearing from the
+ * aircraft back to home, which is just the reciprocal of the bearing we already
+ * computed. Within a right angle of that and it is closing.
+ *
+ * No history and no rate-of-change: measuring distance over time would lag by a
+ * poll and jitter on every position update, where this is exact and instant.
+ */
+function closingOnHome(ac) {
+  if (ac.track == null || ac.bearing_deg == null) return null;
+  const toHome = (ac.bearing_deg + 180) % 360;
+  return Math.abs(((ac.track - toHome + 540) % 360) - 180) < 90;
+}
+
+/** Which of the nine glyphs this aircraft wants, or null for none. */
+function arrowFor(ac) {
+  if (ac.on_ground) return null;              // taxiing is not hovering
+  const vr = ac.baro_rate;
+  if (vr == null) return null;
+  const up = vr > ARROW_CLIMB_FPM, down = vr < -ARROW_CLIMB_FPM;
+  if (ac.gs != null && ac.gs < ARROW_HOVER_KT) {
+    return up ? 'up' : down ? 'down' : 'hover';
+  }
+  const near = closingOnHome(ac);
+  if (near === null) return up ? 'up' : down ? 'down' : null;
+  if (up) return near ? 'upleft' : 'upright';
+  if (down) return near ? 'downleft' : 'downright';
+  return near ? 'left' : 'right';
+}
+
+function drawArrow(x, y, name, color) {
+  const g = ARROWS[name];
+  if (!g) return;
+  for (let row = 0; row < g.length; row++) {
+    for (let col = 0; col < g[row].length; col++) {
+      const c = g[row][col];
+      if (c === '#') setPx(x + col, y + row, color);
+      else if (c === 'R') setPx(x + col, y + row, ARROW_RED);
+    }
+  }
+}
+
 function fmtAlt(ft) {
   if (ft == null) return '--';
   // kept tight: at 6px/char the Mini fits 20 characters across
@@ -507,6 +627,11 @@ function buildFlightFrame(ac, page) {
 
   const availW = W - TEXT_X - M.padX;
   const title = flightTitle(airline, callsign, availW);
+  // The arrow sits at the far right of line 2, so that line - and only that
+  // line - gets less room. Line 2 carries a route or a distance, seven
+  // characters at most, against fifteen available.
+  const arrow = arrowFor(ac);
+  const line2W = arrow ? availW - ARROW_W - 2 : availW;
   const route = (ac.route && ac.route.origin && ac.route.destination)
     ? `${ac.route.origin}${M.routeSep}${ac.route.destination}`
     : `${ac.distance_nm.toFixed(1)}NM`;
@@ -521,7 +646,8 @@ function buildFlightFrame(ac, page) {
   const detail = model || (info.registration !== callsign ? info.registration : '') || '';
 
   drawText(TEXT_X, M.lines[0], fitText(title, availW), C_TEXT);
-  drawText(TEXT_X, M.lines[1], fitText(route, availW), C_TEXT);
+  drawText(TEXT_X, M.lines[1], fitText(route, line2W), C_TEXT);
+  if (arrow) drawArrow(W - M.padX - ARROW_W, M.lines[1], arrow, C_VAL);
   if (detail) drawText(TEXT_X, M.lines[2], fitText(detail, availW), C_TEXT);
 
   if (!M.bottom) return;

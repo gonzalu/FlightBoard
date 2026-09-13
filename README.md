@@ -46,6 +46,7 @@ uses, and every dot you see is an individually addressed LED.
   * [Hiding traffic you don't want](#hiding-traffic-you-dont-want)
   * [Customising the logos](#customising-the-logos)
   * [Configuration reference](#configuration-reference)
+  * [The direction arrow](#the-direction-arrow)
   * [How it works](#how-it-works)
   * [Debug mode](#debug-mode)
   * [Troubleshooting](#troubleshooting)
@@ -825,6 +826,32 @@ you *hide* is separate, and lives in `filters.json` — see
 Display behaviour lives in `CFG` at the top of `frontend/panel.js`: `PAGE_MS`
 (how long each bottom page holds), `MAX_FLIGHTS` (how many aircraft to cycle
 through), `SKIP_GROUND` (whether to include aircraft on the ground).
+
+---
+
+### The direction arrow
+
+At the right-hand end of line 2, one glyph says which way an aircraft is going
+in both dimensions at once.
+
+|  | closing on you | neither | moving away |
+|---|---|---|---|
+| **climbing** | ↖ | ↑ | ↗ |
+| **level** | ← | ▯ | → |
+| **descending** | ↙ | ↓ | ↘ |
+
+The middle column is for something with no horizontal direction worth naming:
+under 30 knots. Straight up and down are a helicopter or a VTOL going vertically;
+the tall rectangle with a red centre is one holding station, which over a city is
+usually police or a news crew.
+
+Closing or opening needs no history. The aircraft's track is compared against the
+bearing from it back to you, and within a right angle of that it is coming your
+way. Exact and instant, where measuring distance over time would lag a poll and
+jitter on every update.
+
+Nothing is drawn for an aircraft on the ground, or one not reporting a vertical
+rate — about a third of them, and a guess would be worse than a blank.
 
 ---
 
