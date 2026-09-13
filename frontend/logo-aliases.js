@@ -20,6 +20,11 @@ const LOGO_ALIASES = {
   NJE: 'EJA',   // NetJets Europe   - same brand, same livery as NetJets. Its
                 //                    radarbox artwork is byte-identical, and
                 //                    EJA's mark comes from tools/fetch_logo_art.py
+  VJH: 'VJT',   // VistaJet Germany - the same airline with a German AOC, and
+                //                    the same red V. Vista America (VJA) and
+                //                    XO (XOJ) are the same group but different
+                //                    brands with their own marks, so they are
+                //                    deliberately not aliased here.
   ENY: 'AAL',   // Envoy Air        - American Eagle only
   JIA: 'AAL',   // PSA Airlines     - American Eagle only
   PDT: 'AAL',   // Piedmont         - American Eagle only

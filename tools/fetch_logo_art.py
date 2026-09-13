@@ -53,6 +53,13 @@ SOURCES = {
     # the fallback chain reaches past them and lands on Cobalt, a different
     # airline. Their own 180px icon is the roundel alone and needs no crop.
     "CNS": "https://www.planesense.com/wp-content/uploads/2023/07/plane-sense-favicon.png",
+    # VistaJet. Every archive copy is the wordmark, 2% ink once reduced. Its own
+    # logo does contain the red Vista "V", but no rectangular crop isolates it:
+    # the grey letters interleave with the V horizontally, so squaring about it
+    # drags in "sta" on one side and "et" on the other. Their favicon is the V
+    # alone on transparency at 48px, which is the second time a favicon has been
+    # the right answer after PlaneSense - so check, despite the note below.
+    "VJT": "https://www.vistajet.com/favicon.ico",
 }
 
 UA = "FlightBoard/1.0 (+https://github.com/gonzalu/FlightBoard)"

@@ -122,6 +122,17 @@ PREFER_SOURCE = {
 # which reads perfectly, measures 19%. What separates them is connected strokes
 # against scattered detail, and that is not worth trying to measure.
 # Look at /logos.html and trust your eyes.
+# Carriers allowed through the sparsity guard, which is a heuristic and gets
+# this class of mark wrong. It rejects thin ink because a reduced wordmark turns
+# to mush, but a single bold stroke is sparse and perfectly legible. Only add a
+# code here after looking at what it actually draws.
+ALLOW_SPARSE = {
+    # VistaJet's V, from their favicon: 55 lit pixels, 7% against a guard of 8%.
+    # Sparse because it is one diagonal stroke, and its aspect leaves the tile
+    # half empty once letterboxed - not because there is nothing there.
+    "VJT",
+}
+
 PREFER_TAIL_FIN = {
     # Tradewind was here until its mark was redrawn by hand at 28x28 rather
     # than reduced to it; see the pass-through in build() below.
@@ -335,7 +346,7 @@ def build(path, size, code):
         src = square_crop(src, crop[1])
     img = fit_square(src, size)
     value, saturation, coverage = ink_stats(img)
-    if coverage < MIN_INK_COVERAGE:
+    if coverage < MIN_INK_COVERAGE and code not in ALLOW_SPARSE:
         return None, f"too sparse ({coverage:.0%} ink)"
     override = BACKGROUND.get(code)
     if override:
