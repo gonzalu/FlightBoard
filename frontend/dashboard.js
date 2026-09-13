@@ -78,37 +78,39 @@ function identLink(ac) {
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-/* ---------- airline logos (same pixel art the LED panel uses) ---------- */
+/* ---------- badges, shared with the LED panel via marks.js ---------- */
 
-function airlineKey(callsign) {
-  const m = /^([A-Z]{3})\d/.exec((callsign || '').trim());
-  if (!m || typeof LOGOS === 'undefined') return null;
-  // regionals wear their mainline partner's tail — see logo-aliases.js
-  const code = (typeof LOGO_ALIASES !== 'undefined' && LOGO_ALIASES[m[1]]) || m[1];
-  return LOGOS[code] ? code : null;
+// The art is 28x28 and CSS upscales it, so the pixels stay hard.
+const MARK_PX = 28;
+
+// Redrawing a canvas 30 times a minute for a mark that has not changed is
+// wasted work and makes the tile flicker, so a signature says when it has.
+function markSignature(ac, info) {
+  const m = markFor(ac, info);
+  return `${m.kind}:${m.key || ''}:${m.text || ''}`;
 }
 
-// Canvases are emitted by renderCards and filled here, once the markup is in
-// the DOM. Drawn at native 26px and upscaled by CSS so the pixels stay crisp.
-function paintLogos() {
-  if (typeof LOGOS === 'undefined') return;
-  for (const cv of cardsEl.querySelectorAll('canvas.logo')) {
-    const logo = LOGOS[cv.dataset.code];
-    if (!logo) continue;
-    const g = cv.getContext('2d');
-    const img = g.createImageData(LOGO_SIZE, LOGO_SIZE);
-    for (let i = 0; i < logo.d.length; i++) {
-      const ch = logo.d.charCodeAt(i);
-      const o = i * 4;
-      if (ch === 48) continue;                       // '0' = transparent
-      const c = logo.p[(ch <= 57 ? ch - 48 : ch - 87) - 1];
-      img.data[o] = (c >> 16) & 255;
-      img.data[o + 1] = (c >> 8) & 255;
-      img.data[o + 2] = c & 255;
-      img.data[o + 3] = 255;
-    }
-    g.putImageData(img, 0, 0);
-  }
+function drawMarkInto(iconEl, ac, info, color) {
+  const m = markFor(ac, info);
+  const cv = document.createElement('canvas');
+  cv.className = 'logo';
+  cv.width = cv.height = MARK_PX;
+  const g = cv.getContext('2d');
+  const img = g.createImageData(MARK_PX, MARK_PX);
+  const px = (x, y, c) => {
+    x |= 0; y |= 0;
+    if (x < 0 || y < 0 || x >= MARK_PX || y >= MARK_PX) return;
+    const o = (y * MARK_PX + x) * 4;
+    img.data[o] = (c >> 16) & 255;
+    img.data[o + 1] = (c >> 8) & 255;
+    img.data[o + 2] = c & 255;
+    img.data[o + 3] = 255;
+  };
+  const airline = (ac.route && ac.route.airline) || '';
+  const [base, accent] = markColors(m.key, airline || info.owner || '');
+  paintMark(px, { x: 0, y: 0, size: MARK_PX }, m, base, accent);
+  g.putImageData(img, 0, 0);
+  iconEl.appendChild(cv);
 }
 
 /* ---------- radar ---------- */
@@ -211,56 +213,133 @@ function tileCapacity() {
   return cols * rows;
 }
 
-function renderCards(aircraft) {
-  const shown = aircraft.slice(0, tileCapacity());
-  cardsEl.innerHTML = shown.map(ac => {
-    const r = ac.route || {};
-    const info = ac.aircraft_info || {};
-    const from = r.from || {}, to = r.to || {};
-    const color = statusColor(ac);
-    const eta = fmtEta(r.eta_min);
-    const code = airlineKey(ac.flight);
-    const mark = code
-      ? `<canvas class="logo" data-code="${code}" width="${LOGO_SIZE}" height="${LOGO_SIZE}"></canvas>`
-      : PLANE;
+/*
+ * Cards are keyed by hex and kept alive between polls.
+ *
+ * They used to be rebuilt with innerHTML every two seconds, which had a cost
+ * that is invisible in a screenshot and maddening in use: the FlightAware link
+ * under your cursor was a different DOM node by the time the mouse button came
+ * up, so the click landed on nothing. Reusing the element fixes that outright.
+ *
+ * Order still follows distance, nearest first, because that is what you want
+ * when you glance at it. But reordering is suspended while the pointer is over
+ * the list - the text keeps updating, the tiles just stop moving - because
+ * aiming at a link that is being re-sorted underneath you is a losing game.
+ */
+const cardByHex = new Map();
+let frozen = false;
 
-    const routeLine = (r.origin && r.destination)
-      ? `${esc(r.origin)}-${esc(r.destination)}` +
-        (from.city && to.city ? `  ${esc(from.city)} &rarr; ${esc(to.city)}` : '')
-      : `brg ${Math.round(ac.bearing_deg)}&deg;`;
+cardsEl.addEventListener('pointerenter', () => { frozen = true; });
+cardsEl.addEventListener('pointerleave', () => { frozen = false; });
 
-    const metrics = ac.on_ground
-      ? `On ground &middot; ${ac.gs > 2 ? 'Taxiing' : 'Stationary'}`
-      : `Alt:${fmtAlt(ac.alt_baro)} Spd:${fmtSpd(ac.gs)} Trk:${fmtTrk(ac.track)} Vr:${fmtVr(ac.baro_rate)}`;
-
-    const bar = r.progress != null
-      ? `<div class="bar"><i style="width:${(r.progress * 100).toFixed(1)}%"></i></div>`
-      : '';
-
-    return `
-      <div class="card">
-        <div class="icon" style="background:${color}22;color:${color}">${mark}</div>
-        <div class="lines">
-          <div class="toprow">
-            <span>${identLink(ac)}</span>
-            <span>${ac.distance_nm.toFixed(1)}NM${ac.source ? ` &middot; ${esc(ac.source)}` : ''}</span>
-          </div>
-          <div class="l1">${esc(flightTitle(ac))}</div>
-          <div class="l2">${routeLine}</div>
-          <div class="l3">${esc(info.type || info.registration || '')}${eta ? ` &middot; in ${eta}` : ''}</div>
-          <div class="l4">${metrics}</div>
-          ${bar}
-        </div>
-      </div>`;
-  }).join('');
-
-  paintLogos();
-  countEl.textContent = `${shown.length} of ${aircraft.length} aircraft`;
+function cardShell() {
+  const el = document.createElement('div');
+  el.className = 'card';
+  el.innerHTML = `
+    <div class="icon"></div>
+    <div class="lines">
+      <div class="toprow"><span class="ident"></span><span class="dist"></span></div>
+      <div class="l1"></div><div class="l2"></div><div class="l3"></div><div class="l4"></div>
+      <div class="barwrap"></div>
+    </div>`;
+  return el;
 }
 
-const PLANE = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-  <path d="M2 16l7-2 5-8 2 1-3 7 6-1 2 2-7 3 1 4-2 1-3-5-6 2z" fill="currentColor"/>
-</svg>`;
+function fillCard(el, ac) {
+  const r = ac.route || {};
+  const info = ac.aircraft_info || {};
+  const from = r.from || {}, to = r.to || {};
+  const color = statusColor(ac);
+  const eta = fmtEta(r.eta_min);
+
+  const icon = el.querySelector('.icon');
+  icon.style.background = color + '22';
+  icon.style.color = color;
+  const wanted = markSignature(ac, info);
+  if (icon.dataset.sig !== wanted) {          // only redraw when it changes
+    icon.dataset.sig = wanted;
+    icon.innerHTML = '';
+    drawMarkInto(icon, ac, info, color);
+  }
+
+  const ident = (ac.flight || '').trim();
+  const identEl = el.querySelector('.ident');
+  const identWanted = /^[A-Z0-9]{2,8}$/.test(ident) ? ident : ac.hex;
+  if (identEl.dataset.v !== identWanted) {
+    identEl.dataset.v = identWanted;
+    identEl.innerHTML = identLink(ac);
+  }
+
+  const routeLine = (r.origin && r.destination)
+    ? `${esc(r.origin)}-${esc(r.destination)}` +
+      (from.city && to.city ? `  ${esc(from.city)} &rarr; ${esc(to.city)}` : '')
+    : `brg ${Math.round(ac.bearing_deg)}&deg;`;
+
+  const metrics = ac.on_ground
+    ? `On ground &middot; ${ac.gs > 2 ? 'Taxiing' : 'Stationary'}`
+    : `Alt:${fmtAlt(ac.alt_baro)} Spd:${fmtSpd(ac.gs)} Trk:${fmtTrk(ac.track)} Vr:${fmtVr(ac.baro_rate)}`;
+
+  // Registration earns its place: for anything without an airline callsign it
+  // is the only identity there is, and it is what you type into a lookup.
+  const reg = info.registration ? esc(info.registration) : '';
+  const type = esc(info.type || '');
+  const l3 = [reg, type].filter(Boolean).join(' &middot; ') +
+             (eta ? `${reg || type ? ' &middot; ' : ''}in ${eta}` : '');
+
+  set(el, '.dist', `${ac.distance_nm.toFixed(1)}NM${ac.source ? ` &middot; ${esc(ac.source)}` : ''}`);
+  set(el, '.l1', esc(flightTitle(ac)));
+  set(el, '.l2', routeLine);
+  set(el, '.l3', l3);
+  set(el, '.l4', metrics);
+
+  const bw = el.querySelector('.barwrap');
+  if (r.progress != null) {
+    let i = bw.querySelector('i');
+    if (!i) { bw.innerHTML = '<div class="bar"><i></i></div>'; i = bw.querySelector('i'); }
+    i.style.width = (r.progress * 100).toFixed(1) + '%';
+  } else if (bw.firstChild) {
+    bw.innerHTML = '';
+  }
+}
+
+// Write only when it changed, so the DOM is not touched 30 times a second for
+// text that is identical.
+function set(el, sel, html) {
+  const n = el.querySelector(sel);
+  if (n && n.innerHTML !== html) n.innerHTML = html;
+}
+
+function renderCards(aircraft) {
+  const shown = aircraft.slice(0, tileCapacity());
+  const present = new Set();
+
+  for (const ac of shown) {
+    present.add(ac.hex);
+    let el = cardByHex.get(ac.hex);
+    if (!el) {
+      el = cardShell();
+      cardByHex.set(ac.hex, el);
+      cardsEl.appendChild(el);
+    }
+    fillCard(el, ac);
+  }
+
+  for (const [hex, el] of cardByHex) {
+    if (!present.has(hex)) { el.remove(); cardByHex.delete(hex); }
+  }
+
+  // Re-sorting moves existing nodes rather than replacing them, so a link
+  // survives the move. Skipped entirely while the pointer is over the list.
+  if (!frozen) {
+    for (const ac of shown) {
+      const el = cardByHex.get(ac.hex);
+      if (el) cardsEl.appendChild(el);
+    }
+  }
+
+  countEl.textContent = `${shown.length} of ${aircraft.length} aircraft` +
+                        (frozen ? ' · order held' : '');
+}
 
 /* ---------- data ---------- */
 
