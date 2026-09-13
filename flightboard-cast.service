@@ -7,10 +7,17 @@ Wants=network-online.target
 Type=oneshot
 
 # ---- EDIT THESE ----------------------------------------------------------
-User=CHANGEME
-# Chromecast friendly name exactly as `catt scan` reports it, and the panel URL
-# the stick should load (must be reachable from the Chromecast, not localhost).
-Environment=FLIGHTBOARD_CAST_DEVICE=Living Room TV
-Environment=FLIGHTBOARD_URL=http://YOUR-SERVER:8090/
-ExecStart=/home/CHANGEME/flightboard/.venv/bin/python /home/CHANGEME/flightboard/tools/flightboard-cast-watchdog.py
+User=YOUR-USER
+# Chromecast friendly name exactly as `catt scan` reports it. The quotes are
+# required, not decoration: Environment= takes a space-separated list of
+# assignments, so an unquoted "Living Room TV" sets the device to "Living" and
+# silently discards the rest.
+Environment="FLIGHTBOARD_CAST_DEVICE=YOUR-CHROMECAST"
+# The panel URL the stick should load. Use the IP address. Chromecasts pin
+# themselves to Google's DNS and ignore the resolver DHCP hands them, so a
+# name from your own router will not resolve on the stick even though it works
+# everywhere else on the network. Not localhost either - the stick fetches this
+# itself. Pair an IP with a DHCP reservation if the server's address can move.
+Environment=FLIGHTBOARD_URL=http://YOUR-SERVER-IP:8090/
+ExecStart=/home/YOUR-USER/flightboard/.venv/bin/python /home/YOUR-USER/flightboard/tools/flightboard-cast-watchdog.py
 # --------------------------------------------------------------------------

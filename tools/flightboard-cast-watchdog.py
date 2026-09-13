@@ -28,24 +28,41 @@ import sys
 
 import pychromecast
 
-DEVICE = os.environ.get("FLIGHTBOARD_CAST_DEVICE", "Living Room TV")
+DEVICE = os.environ.get("FLIGHTBOARD_CAST_DEVICE", "YOUR-CHROMECAST")
 URL = os.environ.get("FLIGHTBOARD_URL", "http://localhost:8090/")
 EXPECT_TITLE = "FlightBoard"          # the panel's <title>
 
 # catt lives alongside the interpreter running this, i.e. in the same venv
 CATT = os.path.join(sys.prefix, "bin", "catt")
 
+# A name that can never match is a different thing from a TV someone switched
+# off, and they deserve different exit codes: the first should show up as a
+# failed unit, the second should stay quiet and try again in five minutes.
+UNMATCHED = "unmatched"
+
 BACKDROP_APP_ID = "E8C28D3C"
 IDLE_APPS = {None, "", BACKDROP_APP_ID, getattr(pychromecast, "IDLE_APP_ID", BACKDROP_APP_ID)}
 
 
 def receiver_state():
-    """(status_text, app_id) for the device, or None if it isn't reachable."""
+    """(status_text, app_id) for the device, or None if it isn't reachable.
+
+    When the name matches nothing, say what discovery *did* find. A TV someone
+    unplugged and a device name that will never match look identical otherwise,
+    and the second one stays silently broken until the day the cast drops.
+    """
     casts, browser = pychromecast.get_listed_chromecasts(
         friendly_names=[DEVICE], timeout=20
     )
     try:
         if not casts:
+            seen, b2 = pychromecast.get_chromecasts(timeout=10)
+            names = sorted(c.name for c in seen)
+            pychromecast.discovery.stop_discovery(b2)
+            if names and DEVICE not in names:
+                print(f"{DEVICE!r} matches nothing. Found: {', '.join(names)}. "
+                      f"Set FLIGHTBOARD_CAST_DEVICE to one of those.")
+                return UNMATCHED
             return None
         cast = casts[0]
         cast.wait(timeout=20)
@@ -56,6 +73,8 @@ def receiver_state():
 
 def main():
     state = receiver_state()
+    if state is UNMATCHED:
+        return 1                      # misconfigured, and systemd should say so
     if state is None:
         print(f"{DEVICE}: not on the network, nothing to do")
         return 0

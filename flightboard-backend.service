@@ -7,18 +7,25 @@ Wants=network-online.target
 Type=simple
 
 # ---- EDIT THESE ----------------------------------------------------------
-# The account that owns the checkout, and where you cloned it. Three paths to
-# change; there is nothing else to fill in here.
-User=CHANGEME
-WorkingDirectory=/home/CHANGEME/flightboard
+# The account that owns the checkout, and where you cloned it.
+#
+# You do not have to fill these in by hand. `python3 tools/make-units.py` knows
+# both answers already and prints this file completed:
+#
+#     python3 tools/make-units.py backend | sudo tee /etc/systemd/system/flightboard-backend.service
+#
+# Edit here instead when the service should run as a different account than the
+# one installing it, which is the only case a script cannot work out.
+User=YOUR-USER
+WorkingDirectory=/home/YOUR-USER/flightboard
 
 # Your coordinates and receivers live in flightboard.env, not in this file, so
 # that a manual `uvicorn` run and this service read the same settings. Copy
 # flightboard.env.example to flightboard.env and edit that. The leading dash
 # means the service still starts if the file is missing.
-EnvironmentFile=-/home/CHANGEME/flightboard/flightboard.env
+EnvironmentFile=-/home/YOUR-USER/flightboard/flightboard.env
 
-ExecStart=/home/CHANGEME/flightboard/.venv/bin/uvicorn backend.main:app --host 0.0.0.0 --port 8090
+ExecStart=/home/YOUR-USER/flightboard/.venv/bin/uvicorn backend.main:app --host 0.0.0.0 --port 8090
 # --------------------------------------------------------------------------
 
 Restart=on-failure
