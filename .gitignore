@@ -19,5 +19,10 @@ flightboard.env
 # Which aircraft you hide. Copy filters.example.json.
 filters.json
 
-# Route database, rebuilt by tools/fetch_routes.py. 30 MB, and regenerable.
+# Standing data - routes, airframes, types - rebuilt by
+# tools/fetch_standing_data.py. About 31 MB, and regenerable.
 data/
+
+# Your coastline and airports, generated for your home by
+# tools/make_basemap.py. Specific to one location.
+frontend/basemap.js

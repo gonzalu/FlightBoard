@@ -38,6 +38,7 @@ uses, and every dot you see is an individually addressed LED.
     + [5. Run it at boot](#5-run-it-at-boot)
   * [Airline logos (optional)](#airline-logos-optional)
   * [Better routes (optional)](#better-routes-optional)
+  * [A map under the radar (optional)](#a-map-under-the-radar-optional)
   * [Getting it onto a TV](#getting-it-onto-a-tv)
     + [Option A — Chromecast](#option-a--chromecast)
     + [Option B — Raspberry Pi on HDMI](#option-b--raspberry-pi-on-hdmi)
@@ -370,6 +371,39 @@ them know what day it is.
 
 ---
 
+## A map under the radar (optional)
+
+The radar on `/dashboard` can draw the coastline, lakes, borders and nearby
+airports under the traffic. It is kept very muted so the aircraft stay the
+brightest thing on it, and it makes it easy to see whether a plane is over the
+water or over town.
+
+```bash
+python3 tools/make_basemap.py
+```
+
+That writes `frontend/basemap.js` for the home in `flightboard.env`. It takes a
+few seconds and downloads about 13 MB, none of which is kept. Reload the
+dashboard to see it. Without the file, the radar looks exactly as it always did.
+
+Airports come from the local database, so build that first (see
+[Better routes](#better-routes-optional)) or the map has none. Only airports
+with an IATA code are drawn. Within 60 nm of the author's receiver that is 16 of
+435 airfields, and most of the rest are heliports.
+
+**Run it again if you move.** The map is cut to your location, and the dashboard
+won't draw a map made for somewhere else; the range note in the header says so
+instead. It also tells you if you zoom out past the edge of the map, which can
+happen after widening `range_nm` a long way.
+
+The geography is [Natural Earth](https://www.naturalearthdata.com/) at 1:10m. It
+is public domain, covers the whole world, and has enough detail for the normal
+view. Zoomed in to a few nm it gets blocky, because around New York it has a
+point only about every 0.9 nm. A finer US Census outline was tried and rejected
+because it draws the Hudson River as land.
+
+---
+
 ## Getting it onto a TV
 
 ### Option A — Chromecast
@@ -488,6 +522,7 @@ What actually needs what:
 | `flightboard-cast.service` | same, then `sudo systemctl restart flightboard-cast.timer` |
 | `tools/make_logos.py`, `tools/fetch_logo_art.py` | regenerate the logos — see below |
 | `tools/fetch_standing_data.py` | rebuild the local database: `python3 tools/fetch_standing_data.py` |
+| `tools/make_basemap.py`, or where home is | re-run `python3 tools/make_basemap.py`, then reload the dashboard |
 
 **`frontend/logos.js` does not arrive with a `git pull`.** It is generated from
 artwork you fetch locally and is gitignored, so when the generator changes your
@@ -1009,8 +1044,7 @@ Read the error next to its name. *All connection attempts failed* is usually a
 hostname that doesn't resolve or a receiver that's off; a *404* means the host
 is up but the path is wrong for its software. Check the URL from the machine
 running FlightBoard, not from your laptop:
-`curl -s -o /dev/null -w '%{http_code}
-' <the URL from flightboard.env>`
+`curl -s -o /dev/null -w '%{http_code}\n' <the URL from flightboard.env>`
 
 **Every aircraft draws a tail fin**
 `frontend/logos.js` has not been generated. Debug mode says so outright on the
@@ -1071,6 +1105,12 @@ aircraft have no airline. Check outbound internet, or set
 **`catt scan` finds nothing**
 The Chromecast has to be powered on and on the same subnet — discovery is mDNS
 and doesn't cross VLANs. Some managed switches and access points block multicast.
+
+**The dashboard radar has no map**
+Either `frontend/basemap.js` hasn't been generated — see
+[A map under the radar](#a-map-under-the-radar-optional) — or it was made for a
+different home, in which case the header says *map is for another home*. Either
+way, run `python3 tools/make_basemap.py` and reload the page.
 
 **Everything works but the display never changes**
 Browsers throttle timers in background tabs. Make it the foreground tab, or use
@@ -1144,6 +1184,8 @@ last page it was given until you stop the cast or it reboots:
   TheFlightWall_OSS.
 - **[Jxck-S/airline-logos](https://github.com/Jxck-S/airline-logos)** for
   collecting airline logo artwork by ICAO code.
+- **[Natural Earth](https://www.naturalearthdata.com/)** for the public-domain
+  coastlines, lakes and borders under the dashboard radar.
 - **[catt](https://github.com/skorokithakis/catt)** and
   **[pychromecast](https://github.com/home-assistant-libs/pychromecast)** for
   making Chromecasts scriptable.

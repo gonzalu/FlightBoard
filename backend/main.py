@@ -1,7 +1,6 @@
 import asyncio
 import hashlib
 import logging
-import math
 import re
 import time
 import unicodedata
@@ -17,6 +16,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import config, filters, routes_db
+from .geo import bearing_deg, haversine_nm
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("flightboard")
@@ -31,23 +31,6 @@ _enrich_cache: dict[str, dict] = {}
 _lookup_queue: asyncio.Queue = asyncio.Queue()
 _queued: set[str] = set()
 _MAX_QUEUE = 500
-
-
-def haversine_nm(lat1, lon1, lat2, lon2):
-    r_nm = 3440.065
-    p1, p2 = math.radians(lat1), math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlambda = math.radians(lon2 - lon1)
-    a = math.sin(dphi / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dlambda / 2) ** 2
-    return 2 * r_nm * math.asin(math.sqrt(a))
-
-
-def bearing_deg(lat1, lon1, lat2, lon2):
-    p1, p2 = math.radians(lat1), math.radians(lat2)
-    dlambda = math.radians(lon2 - lon1)
-    x = math.sin(dlambda) * math.cos(p2)
-    y = math.cos(p1) * math.sin(p2) - math.sin(p1) * math.cos(p2) * math.cos(dlambda)
-    return (math.degrees(math.atan2(x, y)) + 360) % 360
 
 
 def _enqueue(key):

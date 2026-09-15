@@ -113,6 +113,129 @@ function drawMarkInto(iconEl, ac, info, color) {
   iconEl.appendChild(cv);
 }
 
+/* ---------- basemap ---------- */
+
+/*
+ * Land, lakes, borders and airports beneath the radar, when
+ * tools/make_basemap.py has written frontend/basemap.js. Without that file the
+ * radar is exactly as it always was.
+ *
+ * Every point in the file is already nautical miles east and north of home,
+ * which is precisely how the aircraft are placed, so drawing the map is nothing
+ * but a scale and the two cannot drift apart at any zoom.
+ *
+ * The map only changes when you zoom or resize, so it is traced once onto an
+ * offscreen canvas and that is stamped under each frame, rather than walking
+ * thousands of points sixty times a second.
+ */
+const MAP_LAND = '#0a1317';
+const MAP_SHORE = '#1d3440';
+const MAP_BORDER = '#1a2a33';
+const MAP_AIRPORT = '#5b7482';
+const MAP_FONT = '10px Doto, monospace';
+
+let mapCache = null;
+
+const haveBasemap = () => typeof BASEMAP !== 'undefined' && !!BASEMAP;
+
+// A map made for somewhere else would draw the coast in the wrong place with
+// complete confidence, which is worse than drawing nothing.
+function basemapFitsHome() {
+  const h = latest.home, m = BASEMAP.home;
+  if (!h) return false;
+  const north = (h.lat - m.lat) * 60;
+  const east = (h.lon - m.lon) * 60 * Math.cos(h.lat * Math.PI / 180);
+  return Math.hypot(north, east) < 1;
+}
+
+function drawBasemap(w, cx, cy, maxR, range) {
+  if (!haveBasemap() || !basemapFitsHome()) return;
+  const dpr = window.devicePixelRatio || 1;
+  // Font status is part of the key so labels drawn in the fallback font, before
+  // Doto has loaded, are redrawn once it has.
+  const key = `${w}|${dpr}|${range}|${document.fonts ? document.fonts.status : ''}`;
+  if (!mapCache || mapCache.key !== key) {
+    const cv = (mapCache && mapCache.canvas) || document.createElement('canvas');
+    cv.width = cv.height = Math.round(w * dpr);
+    const g = cv.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    paintBasemap(g, cx, cy, maxR, range);
+    mapCache = { key, canvas: cv };
+  }
+  ctx.drawImage(mapCache.canvas, 0, 0, w, w);
+}
+
+function paintBasemap(g, cx, cy, maxR, range) {
+  const k = maxR / range;
+  const trace = (pts, close) => {
+    g.moveTo(cx + pts[0] * k, cy - pts[1] * k);
+    for (let i = 2; i < pts.length; i += 2) g.lineTo(cx + pts[i] * k, cy - pts[i + 1] * k);
+    if (close) g.closePath();
+  };
+
+  g.save();
+  g.beginPath();
+  g.arc(cx, cy, maxR, 0, Math.PI * 2);
+  g.clip();
+  g.lineWidth = 1;
+  g.lineJoin = 'round';
+
+  g.beginPath();
+  for (const ring of BASEMAP.land || []) trace(ring, true);
+  g.fillStyle = MAP_LAND;
+  g.fill();
+  g.strokeStyle = MAP_SHORE;
+  g.stroke();
+
+  // Lakes are cut out of the land rather than painted over it, so they show the
+  // same water the sea does.
+  g.beginPath();
+  for (const ring of BASEMAP.lakes || []) trace(ring, true);
+  g.globalCompositeOperation = 'destination-out';
+  g.fill();
+  g.globalCompositeOperation = 'source-over';
+  g.stroke();
+
+  // State lines dashed; borders between countries a little bolder.
+  g.strokeStyle = MAP_BORDER;
+  g.setLineDash([4, 3]);
+  g.beginPath();
+  for (const line of BASEMAP.states || []) trace(line, false);
+  g.stroke();
+  g.lineWidth = 1.5;
+  g.setLineDash([8, 3]);
+  g.beginPath();
+  for (const line of BASEMAP.countries || []) trace(line, false);
+  g.stroke();
+  g.restore();
+
+  // Airports sit on top. Labels are placed nearest first and dropped where they
+  // would land on another label, the home marker or a ring's distance.
+  const taken = [[cx - 6, cy - 6, 12, 12]];
+  for (let i = 1; i <= 4; i++) taken.push([cx + 2, cy - (maxR * i) / 4 - 13, 32, 12]);
+  const clear = b => !taken.some(t =>
+    b[0] < t[0] + t[2] && t[0] < b[0] + b[2] && b[1] < t[1] + t[3] && t[1] < b[1] + b[3]);
+
+  g.font = MAP_FONT;
+  g.textBaseline = 'middle';
+  g.strokeStyle = g.fillStyle = MAP_AIRPORT;
+  for (const [code, e, n] of BASEMAP.airports || []) {
+    if (Math.hypot(e, n) > range) continue;
+    const x = cx + e * k, y = cy - n * k;
+    g.beginPath();
+    g.arc(x, y, 2.5, 0, Math.PI * 2);
+    g.stroke();
+    const tw = g.measureText(code).width;
+    for (const [lx, ly] of [[x + 6, y], [x - 6 - tw, y], [x - tw / 2, y - 10], [x - tw / 2, y + 10]]) {
+      const box = [lx - 1, ly - 6, tw + 2, 12];
+      if (!clear(box)) continue;
+      taken.push(box);
+      g.fillText(code, lx, ly);
+      break;
+    }
+  }
+}
+
 /* ---------- radar ---------- */
 
 function sizeRadar() {
@@ -130,6 +253,7 @@ function drawRadar() {
   const range = rangeNm || latest.max_range_nm || 40;
 
   ctx.clearRect(0, 0, w, w);
+  drawBasemap(w, cx, cy, maxR, range);
 
   ctx.strokeStyle = '#1a2732';
   ctx.lineWidth = 1;
@@ -200,7 +324,12 @@ canvas.addEventListener('dblclick', () => {
 
 function updateRangeLabel() {
   const r = rangeNm || latest.max_range_nm || 40;
-  rangeLabelEl.textContent = `range ${r < 8 ? r.toFixed(1) : Math.round(r)} nm — scroll to zoom, double-click to reset`;
+  const note = !haveBasemap() || !latest.home ? ''
+    : !basemapFitsHome() ? ' · map is for another home: rerun tools/make_basemap.py'
+    : r > BASEMAP.radius_nm ? ` · map ends at ${BASEMAP.radius_nm} nm`
+    : '';
+  rangeLabelEl.textContent =
+    `range ${r < 8 ? r.toFixed(1) : Math.round(r)} nm — scroll to zoom, double-click to reset${note}`;
 }
 
 /* ---------- tiles ---------- */
