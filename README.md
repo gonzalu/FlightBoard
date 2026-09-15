@@ -402,6 +402,21 @@ view. Zoomed in to a few nm it gets blocky, because around New York it has a
 point only about every 0.9 nm. A finer US Census outline was tried and rejected
 because it draws the Hudson River as land.
 
+**Changing its colours.** They are the four lines starting `const MAP_` in
+`frontend/dashboard.js`. Edit the colour codes, save, and reload the dashboard;
+nothing needs regenerating or restarting.
+
+| Line | What it colours | Default |
+|---|---|---|
+| `MAP_LAND` | the land | `#0a1317` |
+| `MAP_SHORE` | coastlines and lake shores | `#1d3440` |
+| `MAP_BORDER` | state and country borders | `#1a2a33` |
+| `MAP_AIRPORT` | airport rings and codes | `#b08d4a` |
+
+Keep them dimmer than the aircraft, which are drawn on top and should stay the
+brightest thing on the radar. Because `dashboard.js` comes with FlightBoard, read
+[Keeping it up to date](#keeping-it-up-to-date) before your next `git pull`.
+
 ---
 
 ## Getting it onto a TV
@@ -523,6 +538,29 @@ What actually needs what:
 | `tools/make_logos.py`, `tools/fetch_logo_art.py` | regenerate the logos — see below |
 | `tools/fetch_standing_data.py` | rebuild the local database: `python3 tools/fetch_standing_data.py` |
 | `tools/make_basemap.py`, or where home is | re-run `python3 tools/make_basemap.py`, then reload the dashboard |
+
+**If you've edited a file that came with FlightBoard**, such as the map colours
+in `frontend/dashboard.js` or `CFG` in `frontend/panel.js`, a `git pull` that
+changes the same file stops with *Your local changes to the following files
+would be overwritten by merge*. Add `--autostash`: git sets your edits aside,
+updates, and puts them back.
+
+```bash
+cd ~/flightboard && git pull --autostash && sudo systemctl restart flightboard-backend
+```
+
+If the update changed the very lines you edited, git still finishes but says
+*Applying autostash resulted in conflicts*. The file then holds both versions
+between `<<<<<<<` and `>>>>>>>` lines, the page it belongs to stops working, and
+the next `git pull` refuses. Take the new version of the file git named, and make
+your change again:
+
+```bash
+cd ~/flightboard
+git stash show -p                            # shows what you had changed
+git checkout HEAD -- frontend/dashboard.js   # the new file, conflict cleared
+git stash drop                               # once your change is back in
+```
 
 **`frontend/logos.js` does not arrive with a `git pull`.** It is generated from
 artwork you fetch locally and is gitignored, so when the generator changes your

@@ -131,7 +131,7 @@ function drawMarkInto(iconEl, ac, info, color) {
 const MAP_LAND = '#0a1317';
 const MAP_SHORE = '#1d3440';
 const MAP_BORDER = '#1a2a33';
-const MAP_AIRPORT = '#5b7482';
+const MAP_AIRPORT = '#b08d4a';
 const MAP_FONT = '10px Doto, monospace';
 
 let mapCache = null;
