@@ -249,10 +249,11 @@ function paintBasemap(g, cx, cy, maxR, range) {
  * showing the dashboard needs the internet and asks a third party for tiles,
  * which is why nothing here happens unless you ask for it.
  *
- * Streets below motorway class are switched off and the place names dimmed, so
- * the map stays a backdrop and the traffic stays the brightest thing on it.
- * Coastline, borders, motorways and runways are what remain. The airports are
- * still ours, drawn over the top from basemap.js.
+ * Everything drawn as a line is switched off - roads of every class, railways,
+ * boundaries - and the place names dimmed, so the map stays a backdrop and the
+ * traffic stays the brightest thing on it. What is left is land, water, names,
+ * and runway shapes close in. The airports are still ours, drawn over the top
+ * from basemap.js.
  *
  * It is a plain DOM layer behind the canvas, sized to the radar circle and
  * centred on home, so the two agree without any compositing. Aircraft keep the
@@ -265,14 +266,17 @@ const LIVE_LIB_JS = 'https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.1/dist/maplibr
 const LIVE_LIB_JS_SRI = 'sha384-/L1njH4bbgNt9Uk3HwJ272N9fxJzRBQCxhtwGkZiqgl+Nxpq2ETUNZhNMNV1RgyW';
 const LIVE_LIB_CSS = 'https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.1/dist/maplibre-gl.css';
 const LIVE_LIB_CSS_SRI = 'sha384-Nq6PQ+9vJPvw7U/VfDELyrWoGQMsy0gi6QShhaSrGzkpF5KkM40csg2leky+YMTd';
-// Side streets, railways, buildings and their names. Everything the radar can
-// actually navigate by - motorways, coast, borders, runways - stays.
+// Every line the style would draw across the land and the water: roads of all
+// classes, railways, piers, and the state and country boundaries, which run out
+// over the sound and read as stray double lines on a radar.
 const LIVE_HIDE = [
   'highway_path', 'highway_minor', 'highway_major_casing', 'highway_major_inner',
-  'highway_major_subtle', 'highway_name_other', 'railway', 'railway_dashline',
-  'railway_minor', 'railway_minor_dashline', 'railway_transit',
-  'railway_transit_dashline', 'building', 'road_oneway', 'road_oneway_opposite',
-  'road_pier', 'road_area_pier',
+  'highway_major_subtle', 'highway_name_other', 'highway_motorway_casing',
+  'highway_motorway_inner', 'highway_motorway_subtle', 'highway_name_motorway',
+  'railway', 'railway_dashline', 'railway_minor', 'railway_minor_dashline',
+  'railway_transit', 'railway_transit_dashline', 'building', 'road_oneway',
+  'road_oneway_opposite', 'road_pier', 'road_area_pier',
+  'boundary_state', 'boundary_country_z0-4', 'boundary_country_z5-',
 ];
 const LIVE_PLACE_OPACITY = 0.45;
 

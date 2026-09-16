@@ -437,9 +437,9 @@ here is fetched: no map library, no tiles, no request to any map service.
   dashboard. The tiles come from [OpenFreeMap](https://openfreemap.org/), which
   asks for no key and sets no limits. If anything fails to load, the built-in
   map is drawn instead, exactly as before.
-- **Side streets, railways and buildings are switched off** and the place names
-  dimmed, so the map stays a backdrop. Motorways, coastline, borders and
-  runways stay, which is what you can navigate by.
+- **Roads, railways and boundaries are switched off** and the place names
+  dimmed, so the map stays a backdrop: land, water, the names, and runway
+  shapes close in.
 - **Your airports are still drawn on top** from `basemap.js`, so build that as
   well or you get the map without them.
 - **The credit in the corner is required** by the licence on the data. Leave it
