@@ -153,7 +153,7 @@ function drawBasemap(w, cx, cy, maxR, range) {
   const dpr = window.devicePixelRatio || 1;
   // Font status is part of the key so labels drawn in the fallback font, before
   // Doto has loaded, are redrawn once it has.
-  const key = `${w}|${dpr}|${range}|${document.fonts ? document.fonts.status : ''}`;
+  const key = `${w}|${dpr}|${range}|${liveMap ? 'live' : ''}|${document.fonts ? document.fonts.status : ''}`;
   if (!mapCache || mapCache.key !== key) {
     const cv = (mapCache && mapCache.canvas) || document.createElement('canvas');
     cv.width = cv.height = Math.round(w * dpr);
@@ -173,41 +173,44 @@ function paintBasemap(g, cx, cy, maxR, range) {
     if (close) g.closePath();
   };
 
-  g.save();
-  g.beginPath();
-  g.arc(cx, cy, maxR, 0, Math.PI * 2);
-  g.clip();
-  g.lineWidth = 1;
-  g.lineJoin = 'round';
+  // With the live map showing, the ground beneath is its job, not ours.
+  if (!liveMap) {
+    g.save();
+    g.beginPath();
+    g.arc(cx, cy, maxR, 0, Math.PI * 2);
+    g.clip();
+    g.lineWidth = 1;
+    g.lineJoin = 'round';
 
-  g.beginPath();
-  for (const ring of BASEMAP.land || []) trace(ring, true);
-  g.fillStyle = MAP_LAND;
-  g.fill();
-  g.strokeStyle = MAP_SHORE;
-  g.stroke();
+    g.beginPath();
+    for (const ring of BASEMAP.land || []) trace(ring, true);
+    g.fillStyle = MAP_LAND;
+    g.fill();
+    g.strokeStyle = MAP_SHORE;
+    g.stroke();
 
-  // Lakes are cut out of the land rather than painted over it, so they show the
-  // same water the sea does.
-  g.beginPath();
-  for (const ring of BASEMAP.lakes || []) trace(ring, true);
-  g.globalCompositeOperation = 'destination-out';
-  g.fill();
-  g.globalCompositeOperation = 'source-over';
-  g.stroke();
+    // Lakes are cut out of the land rather than painted over it, so they show
+    // the same water the sea does.
+    g.beginPath();
+    for (const ring of BASEMAP.lakes || []) trace(ring, true);
+    g.globalCompositeOperation = 'destination-out';
+    g.fill();
+    g.globalCompositeOperation = 'source-over';
+    g.stroke();
 
-  // State lines dashed; borders between countries a little bolder.
-  g.strokeStyle = MAP_BORDER;
-  g.setLineDash([4, 3]);
-  g.beginPath();
-  for (const line of BASEMAP.states || []) trace(line, false);
-  g.stroke();
-  g.lineWidth = 1.5;
-  g.setLineDash([8, 3]);
-  g.beginPath();
-  for (const line of BASEMAP.countries || []) trace(line, false);
-  g.stroke();
-  g.restore();
+    // State lines dashed; borders between countries a little bolder.
+    g.strokeStyle = MAP_BORDER;
+    g.setLineDash([4, 3]);
+    g.beginPath();
+    for (const line of BASEMAP.states || []) trace(line, false);
+    g.stroke();
+    g.lineWidth = 1.5;
+    g.setLineDash([8, 3]);
+    g.beginPath();
+    for (const line of BASEMAP.countries || []) trace(line, false);
+    g.stroke();
+    g.restore();
+  }
 
   // Airports sit on top. Labels are placed nearest first and dropped where they
   // would land on another label, the home marker or a ring's distance.
@@ -236,6 +239,138 @@ function paintBasemap(g, cx, cy, maxR, range) {
   }
 }
 
+/*
+ * An optional live map underneath, off unless the URL says ?map=live.
+ *
+ * The map above is deliberately coarse: Natural Earth has a point about every
+ * 0.9 nm, which is fine at 40 nm and blocky at 4. This draws the same ground
+ * from OpenStreetMap instead, in OpenFreeMap's copy of the Dark Matter style,
+ * and stays sharp to the last nautical mile. The cost is that the browser
+ * showing the dashboard needs the internet and asks a third party for tiles,
+ * which is why nothing here happens unless you ask for it.
+ *
+ * Streets below motorway class are switched off and the place names dimmed, so
+ * the map stays a backdrop and the traffic stays the brightest thing on it.
+ * Coastline, borders, motorways and runways are what remain. The airports are
+ * still ours, drawn over the top from basemap.js.
+ *
+ * It is a plain DOM layer behind the canvas, sized to the radar circle and
+ * centred on home, so the two agree without any compositing. Aircraft keep the
+ * projection they have always had: at 40 nm that puts them within two pixels of
+ * where the map itself would draw them.
+ */
+const LIVE_MAP = new URLSearchParams(location.search).get('map') === 'live';
+const LIVE_STYLE = 'https://tiles.openfreemap.org/styles/dark';
+const LIVE_LIB_JS = 'https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.1/dist/maplibre-gl.js';
+const LIVE_LIB_JS_SRI = 'sha384-/L1njH4bbgNt9Uk3HwJ272N9fxJzRBQCxhtwGkZiqgl+Nxpq2ETUNZhNMNV1RgyW';
+const LIVE_LIB_CSS = 'https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.1/dist/maplibre-gl.css';
+const LIVE_LIB_CSS_SRI = 'sha384-Nq6PQ+9vJPvw7U/VfDELyrWoGQMsy0gi6QShhaSrGzkpF5KkM40csg2leky+YMTd';
+// Side streets, railways, buildings and their names. Everything the radar can
+// actually navigate by - motorways, coast, borders, runways - stays.
+const LIVE_HIDE = [
+  'highway_path', 'highway_minor', 'highway_major_casing', 'highway_major_inner',
+  'highway_major_subtle', 'highway_name_other', 'railway', 'railway_dashline',
+  'railway_minor', 'railway_minor_dashline', 'railway_transit',
+  'railway_transit_dashline', 'building', 'road_oneway', 'road_oneway_opposite',
+  'road_pier', 'road_area_pier',
+];
+const LIVE_PLACE_OPACITY = 0.45;
+
+let liveMap = null;        // the map itself, once it has really loaded
+let livePane = null;       // the div it lives in
+let liveZoom = null;       // last zoom pushed, so it only moves when it must
+
+function loadAsset(tag, attrs) {
+  return new Promise((resolve, reject) => {
+    const el = Object.assign(document.createElement(tag), attrs);
+    el.onload = () => resolve(el);
+    el.onerror = () => reject(new Error('could not load ' + (attrs.src || attrs.href)));
+    document.head.appendChild(el);
+  });
+}
+
+// The scale the radar is drawing at, expressed the way a web map wants it.
+function liveZoomFor(range) {
+  const maxR = radarSize / 2 - 24;
+  const metresPerPixel = (range * 1852) / maxR;
+  return Math.log2(40075016.686 * Math.cos(latest.home.lat * Math.PI / 180) / (512 * metresPerPixel));
+}
+
+// Required by the licence on the tiles, and it belongs on the map itself.
+function addMapCredit() {
+  const el = document.createElement('div');
+  el.id = 'mapCredit';
+  el.innerHTML =
+    '<a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">&copy; OpenMapTiles</a> ' +
+    '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">&copy; OpenStreetMap contributors</a>';
+  radarPane.appendChild(el);
+}
+
+async function initLiveMap() {
+  livePane = document.createElement('div');
+  livePane.id = 'liveMap';
+  radarPane.appendChild(livePane);
+  sizeRadar();
+  try {
+    await Promise.all([
+      loadAsset('link', { rel: 'stylesheet', href: LIVE_LIB_CSS, integrity: LIVE_LIB_CSS_SRI, crossOrigin: 'anonymous' }),
+      loadAsset('script', { src: LIVE_LIB_JS, integrity: LIVE_LIB_JS_SRI, crossOrigin: 'anonymous' }),
+    ]);
+    const map = new maplibregl.Map({
+      container: livePane,
+      style: LIVE_STYLE,
+      center: [latest.home.lon, latest.home.lat],
+      zoom: liveZoomFor(rangeNm || latest.max_range_nm || 40),
+      interactive: false,
+      attributionControl: false,
+      fadeDuration: 0,
+    });
+    // A tab the browser is not drawing gets no animation frames, so the map
+    // cannot finish loading in one; that is not a failure, and it completes on
+    // its own when the tab comes back. So the wait is only given a deadline
+    // while the tab is actually visible, for the case where the style or the
+    // tiles never arrive at all.
+    await new Promise((resolve, reject) => {
+      let timer = null;
+      const arm = () => {
+        clearTimeout(timer);
+        if (!document.hidden) timer = setTimeout(() => giveUp(), 20000);
+      };
+      const settle = fn => (...args) => {
+        clearTimeout(timer);
+        document.removeEventListener('visibilitychange', arm);
+        fn(...args);
+      };
+      const giveUp = settle(() => reject(new Error('the map did not load')));
+      document.addEventListener('visibilitychange', arm);
+      arm();
+      map.once('load', settle(resolve));
+      map.once('error', settle(e => reject(new Error((e && e.error && e.error.message) || 'tiles unavailable'))));
+    });
+    for (const layer of map.getStyle().layers) {
+      if (LIVE_HIDE.includes(layer.id)) map.setLayoutProperty(layer.id, 'visibility', 'none');
+      else if (layer.id.startsWith('place_')) map.setPaintProperty(layer.id, 'text-opacity', LIVE_PLACE_OPACITY);
+    }
+    liveMap = map;
+    mapCache = null;          // the drawn-in land has to come back off
+    addMapCredit();
+    updateRangeLabel();
+  } catch (e) {
+    // Anything at all going wrong just leaves the built-in map in place.
+    console.warn('live map unavailable, keeping the built-in one:', e.message);
+    livePane.remove();
+    livePane = null;
+  }
+}
+
+function syncLiveMap(range) {
+  if (!liveMap) return;
+  const zoom = liveZoomFor(range);
+  if (zoom === liveZoom) return;
+  liveMap.jumpTo({ center: [latest.home.lon, latest.home.lat], zoom });
+  liveZoom = zoom;
+}
+
 /* ---------- radar ---------- */
 
 function sizeRadar() {
@@ -245,6 +380,15 @@ function sizeRadar() {
   canvas.style.width = canvas.style.height = box + 'px';
   canvas.width = canvas.height = Math.round(box * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (livePane) {
+    // exactly the radar circle: same centre, same radius, so the map and the
+    // rings cannot disagree about where anything is
+    const d = box - 48;
+    livePane.style.width = livePane.style.height = d + 'px';
+    livePane.style.left = canvas.offsetLeft + 24 + 'px';
+    livePane.style.top = canvas.offsetTop + 24 + 'px';
+    if (liveMap) { liveMap.resize(); liveZoom = null; }
+  }
 }
 
 function drawRadar() {
@@ -252,6 +396,7 @@ function drawRadar() {
   const maxR = w / 2 - 24;
   const range = rangeNm || latest.max_range_nm || 40;
 
+  syncLiveMap(range);
   ctx.clearRect(0, 0, w, w);
   drawBasemap(w, cx, cy, maxR, range);
 
@@ -324,7 +469,8 @@ canvas.addEventListener('dblclick', () => {
 
 function updateRangeLabel() {
   const r = rangeNm || latest.max_range_nm || 40;
-  const note = !haveBasemap() || !latest.home ? ''
+  const note = liveMap ? ' · live map'
+    : !haveBasemap() || !latest.home ? ''
     : !basemapFitsHome() ? ' · map is for another home: rerun tools/make_basemap.py'
     : r > BASEMAP.radius_nm ? ` · map ends at ${BASEMAP.radius_nm} nm`
     : '';
@@ -478,6 +624,7 @@ async function poll() {
     const data = await res.json();
     latest = data;
     if (rangeNm === null) { rangeNm = data.max_range_nm; updateRangeLabel(); }
+    if (LIVE_MAP && !livePane && data.home) initLiveMap();
 
     const stale = data.age_s == null || data.age_s > 90;
     const live = !(data.last_error && stale);

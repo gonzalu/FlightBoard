@@ -39,6 +39,7 @@ uses, and every dot you see is an individually addressed LED.
   * [Airline logos (optional)](#airline-logos-optional)
   * [Better routes (optional)](#better-routes-optional)
   * [A map under the radar (optional)](#a-map-under-the-radar-optional)
+    + [A sharper map, live from OpenStreetMap](#a-sharper-map-live-from-openstreetmap)
   * [Getting it onto a TV](#getting-it-onto-a-tv)
     + [Option A — Chromecast](#option-a--chromecast)
     + [Option B — Raspberry Pi on HDMI](#option-b--raspberry-pi-on-hdmi)
@@ -416,6 +417,35 @@ nothing needs regenerating or restarting.
 Keep them dimmer than the aircraft, which are drawn on top and should stay the
 brightest thing on the radar. Because `dashboard.js` comes with FlightBoard, read
 [Keeping it up to date](#keeping-it-up-to-date) before your next `git pull`.
+
+### A sharper map, live from OpenStreetMap
+
+Natural Earth is coarse close in. Below about 10 nm the coast turns to angles,
+because it only has a point every 0.9 nm or so. The dashboard can draw the same
+ground from OpenStreetMap instead, in the
+[Dark Matter](https://openmaptiles.org/styles/dark-matter/) style, which stays
+sharp all the way in. Add `?map=live` to the dashboard address:
+
+```
+http://YOUR-HOST:8090/dashboard.html?map=live
+```
+
+It is per display, like `?debug=1`, and off everywhere else. Without it nothing
+here is fetched: no map library, no tiles, no request to any map service.
+
+- **It needs the internet and WebGL** on whatever browser is showing the
+  dashboard. The tiles come from [OpenFreeMap](https://openfreemap.org/), which
+  asks for no key and sets no limits. If anything fails to load, the built-in
+  map is drawn instead, exactly as before.
+- **Side streets, railways and buildings are switched off** and the place names
+  dimmed, so the map stays a backdrop. Motorways, coastline, borders and
+  runways stay, which is what you can navigate by.
+- **Your airports are still drawn on top** from `basemap.js`, so build that as
+  well or you get the map without them.
+- **The credit in the corner is required** by the licence on the data. Leave it
+  where it is.
+- The map library is fetched from a CDN, pinned to one version and checked
+  against a hash.
 
 ---
 
