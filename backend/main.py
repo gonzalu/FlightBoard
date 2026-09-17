@@ -565,6 +565,12 @@ async def _poll_loop():
             )
 
             merged = {}      # hex -> (position age, entry); freshest sighting wins
+            # Every receiver that saw each aircraft, in configured order. "source"
+            # below is only whichever report was freshest, and where coverage
+            # overlaps most aircraft are seen by several: which of them is freshest
+            # alternates from one poll to the next, so anything drawn from it alone
+            # flickers. The panel's receiver dots read this instead.
+            seen_by = {}
             sources = []
             for url, result in zip(config.RECEIVERS, results):
                 name = _receiver_name(url)
@@ -578,12 +584,18 @@ async def _poll_loop():
                     if entry is None:
                         continue
                     seen += 1
+                    who = seen_by.setdefault(entry["hex"], [])
+                    if name not in who:   # one receiver listing a hex twice is still one receiver
+                        who.append(name)
                     age = ac.get("seen_pos", ac.get("seen", 999)) or 0
                     current = merged.get(entry["hex"])
                     if current is None or age < current[0]:
                         entry["source"] = name
                         merged[entry["hex"]] = (age, entry)
                 sources.append({"name": name, "ok": True, "aircraft": seen})
+
+            for hexid, (_, entry) in merged.items():
+                entry["seen_by"] = seen_by.get(hexid, [])
 
             if any(s["ok"] for s in sources):
                 out = sorted((e for _, e in merged.values()), key=lambda a: a["distance_nm"])

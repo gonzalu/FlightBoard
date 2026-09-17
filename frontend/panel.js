@@ -375,18 +375,70 @@ function bottomPages(ac) {
 const DOT_CURRENT = 0x66d9ff;
 const DOT_PENDING = 0x5c8799;
 const DOT_SEEN = 0x2b4654;
+const DOT_PITCH = 3;
+const DOT_Y = 35;
+
+// Where the cycle dots start, so the receiver dots at the other end of the same
+// band know where to stop. W when there are none to avoid.
+function cycleDotsX0() {
+  if (flights.length < 2) return W;
+  const shown = Math.min(flights.length, 14);
+  return W - M.padX - (shown * DOT_PITCH - (DOT_PITCH - 1));
+}
 
 function drawCycleDots() {
   if (flights.length < 2) return;
   const shown = Math.min(flights.length, 14);
-  const pitch = 3;
-  const x0 = W - M.padX - (shown * pitch - (pitch - 1));
+  const x0 = cycleDotsX0();
   for (let i = 0; i < shown; i++) {
     const a = flights[i];
     const colour = a.hex === showingHex ? DOT_CURRENT
       : seenThisPass.has(a.hex) ? DOT_SEEN
       : DOT_PENDING;
-    setPx(x0 + i * pitch, 35, colour);
+    setPx(x0 + i * DOT_PITCH, DOT_Y, colour);
+  }
+}
+
+// One dot per configured receiver, at the left end of the same band. Lit means
+// that receiver can see this aircraft right now, dim that it is configured but
+// cannot. Where two feeders overlap, both lit is the common and correct answer,
+// which is why this reads seen_by and not source: source names only whichever
+// report was freshest, and that alternates between them from poll to poll.
+//
+// Left to right in the order they are listed in FLIGHTBOARD_RECEIVERS. Ordering
+// by address was the obvious alternative and does not work: a receiver named by
+// hostname has no address here without a DNS lookup, so the order would be
+// meaningful on some boards and arbitrary on others.
+//
+// Colours are fixed by position rather than random, so a feeder keeps its colour
+// across reloads and across boards - the only thing that makes them learnable.
+// Past the palette they fall back to the same hash the badges use.
+const RECEIVER_COLORS = [0xff4040, 0x40ff40, 0x5c86ff, 0xffb020, 0xff4cf0, 0x40ffd0];
+const RECEIVER_DIM = 0.22;
+let receivers = [];
+
+function receiverColor(name, i) {
+  if (i < RECEIVER_COLORS.length) return RECEIVER_COLORS[i];
+  return typeof hashColors === 'function' ? hashColors(name)[1] : 0x808080;
+}
+
+function dimmed(c, f) {
+  return (Math.round(((c >> 16) & 0xff) * f) << 16)
+       | (Math.round(((c >> 8) & 0xff) * f) << 8)
+       | Math.round((c & 0xff) * f);
+}
+
+function drawReceiverDots(ac) {
+  if (!receivers.length) return;
+  // seen_by is the full set; fall back to the single winner on an older backend
+  const saw = new Set(ac && ac.seen_by ? ac.seen_by
+    : (ac && ac.source ? [ac.source] : []));
+  const limit = cycleDotsX0() - DOT_PITCH;   // never run into the cycle dots
+  for (let i = 0; i < receivers.length; i++) {
+    const x = M.padX + i * DOT_PITCH;
+    if (x > limit) break;
+    const base = receiverColor(receivers[i].name, i);
+    setPx(x, DOT_Y, saw.has(receivers[i].name) ? base : dimmed(base, RECEIVER_DIM));
   }
 }
 
@@ -465,6 +517,7 @@ function buildFlightFrame(ac, page) {
   });
 
   drawCycleDots();
+  drawReceiverDots(ac);
   if (ac.route && ac.route.progress != null) drawProgress(ac.route.progress);
 }
 
@@ -618,6 +671,10 @@ async function poll() {
     // 0,0 and is filtered out. Worth calling out separately: "No aircraft in
     // range" is true but sends you looking at a receiver that is working fine.
     homeUnset = !!data.home && !data.home.lat && !data.home.lon;
+
+    // The configured receivers, in the order the backend was given them, which
+    // is the order their dots appear along the bottom band.
+    receivers = data.sources || [];
 
     const all = data.aircraft || [];
     flights = (CFG.SKIP_GROUND ? all.filter(a => !a.on_ground) : all)

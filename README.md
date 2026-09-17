@@ -50,6 +50,7 @@ uses, and every dot you see is an individually addressed LED.
   * [Configuration reference](#configuration-reference)
   * [Helicopters](#helicopters)
   * [The direction arrow](#the-direction-arrow)
+  * [Which receiver saw it](#which-receiver-saw-it)
   * [How it works](#how-it-works)
   * [Debug mode](#debug-mode)
   * [Troubleshooting](#troubleshooting)
@@ -1016,6 +1017,47 @@ jitter on every update.
 
 Nothing is drawn for an aircraft on the ground, or one not reporting a vertical
 rate — about a third of them, and a guess would be worse than a blank.
+
+---
+
+### Which receiver saw it
+
+With more than one feeder configured, a row of coloured dots sits at the left of
+the band between the aircraft type and the metrics — the same band the cycle
+dots occupy at the right. One dot per receiver. **Lit** means that receiver can
+see the aircraft on screen right now; **dim** means it is configured but cannot.
+
+Where two feeders' coverage overlaps, expect both lit. That is the common case
+rather than a fault: the same aircraft is genuinely being received twice, and
+saying so is more useful than picking a winner. A receiver that is down sees
+nothing, so its dot simply stays dim.
+
+**The dots read left to right in the order you list them in
+`FLIGHTBOARD_RECEIVERS`.** Reorder that variable and the dots reorder with it.
+That variable lives in `flightboard.env`, which the service reads once at
+startup — unlike `filters.json`, it does not reload itself, so restart the
+backend after changing it.
+
+Ordering them by address instead was the obvious idea and does not survive
+contact with a real config: a receiver named by hostname has no address here
+until something resolves it, so the order would be meaningful on the boards that
+use IP addresses and arbitrary on the ones that don't. One rule that behaves the
+same everywhere beats a better rule that only sometimes applies.
+
+Colours are fixed by position — red, green, blue, amber, magenta, teal, and a
+hash of the receiver's name past that. They are stable across reloads and across
+boards, which is what makes them learnable at a glance, but **the colour belongs
+to the slot rather than to the receiver**: reorder `FLIGHTBOARD_RECEIVERS` and a
+feeder changes colour along with its place in the row. Appending a receiver to
+the end leaves the existing ones as they were; inserting one in the middle shifts
+the colour of every receiver after it.
+
+Nothing on the panel labels which dot is which: with two or three feeders you
+learn them in a day. Past that you would want a legend, and there is nowhere on
+a 128×64 panel to put one — if you run that many receivers, open an issue and
+say what would actually help.
+
+Mini model only. The 160×32 `oss` layout has no bottom band to put them in.
 
 ---
 
