@@ -790,8 +790,38 @@ A personal access token works too, used in place of the password, but it grants
 far more than one repository and has to be renewed. The deploy key is one per
 board, revocable on its own, and read-only.
 
-To update the artwork later, change it in the repository, then `git pull` inside
-`logo-sources/custom` and regenerate.
+**4. To update the artwork later, pull — do not clone again.** Add or change
+files in the repository, by dragging them onto the repository page in a browser
+and committing. Then on each board:
+
+```bash
+cd ~/flightboard/logo-sources/custom && git pull
+```
+
+Re-running the clone from step 3 does not work a second time, because the
+directory is no longer empty:
+
+```
+fatal: destination path 'logo-sources/custom' already exists and is not an empty directory
+```
+
+Nothing was harmed if you tried it — git refuses before touching anything.
+
+That pull affects only the nested repository. `logo-sources/` is gitignored by
+FlightBoard itself, so `git -C ~/flightboard status` stays clean and pulling
+artwork can never collide with a FlightBoard update. The two repositories simply
+do not see each other.
+
+New artwork does not reach the panel until `logos.js` is rebuilt from it, with
+the generator command in *Regenerating the logos* above. Until then the board
+keeps showing whatever the last build produced — including, confusingly, the old
+version of a file you have just replaced.
+
+**A public repository pulls with no credentials; a private one does not.** If you
+started public and later switch the repository to private, every board that
+cloned over https stops pulling until it has the deploy key described above. Set
+the key up first, then flip the repository — in that order, or the breakage
+arrives days later looking like something else.
 
 <details><summary>Doing it from the command line instead</summary>
 
