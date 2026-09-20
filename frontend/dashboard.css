@@ -31,6 +31,10 @@ html, body {
 }
 
 #title { font-size: 22px; letter-spacing: 4px; }
+/* dim like the map credit, so it is there when wanted but never competes with the traffic */
+#nav { display: flex; gap: 18px; margin-right: auto; margin-left: 32px; font-size: 12px; }
+#nav a { color: var(--led-dim); text-decoration: none; }
+#nav a:hover, #nav a:focus-visible { color: var(--led); text-decoration: underline; }
 #hdrRight { display: flex; gap: 22px; align-items: baseline; font-size: 12px; color: var(--led-dim); }
 #clock { color: var(--led); font-size: 16px; }
 

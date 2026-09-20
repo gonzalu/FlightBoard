@@ -22,6 +22,9 @@
     display: flex; gap: 18px; align-items: center; flex-wrap: wrap;
   }
   h1 { font-size: 20px; margin: 0; letter-spacing: 3px; }
+  #nav { display: flex; gap: 14px; font-size: 12px; }
+  #nav a { color: var(--dim); text-decoration: none; }
+  #nav a:hover, #nav a:focus-visible { color: var(--led); text-decoration: underline; }
   input, select {
     background: var(--panel); color: var(--led); border: 1px solid var(--line);
     border-radius: 3px; padding: 6px 10px; font: inherit; font-size: 14px;
@@ -44,6 +47,10 @@
 <body>
   <header>
     <h1>LOGOS</h1>
+    <nav id="nav" aria-label="Views">
+      <a href="/">Panel</a>
+      <a href="/dashboard.html">Dashboard</a>
+    </nav>
     <input id="q" placeholder="filter by ICAO code, e.g. JBU" autocomplete="off" size="22">
     <select id="bg">
       <option value="all">all backgrounds</option>
