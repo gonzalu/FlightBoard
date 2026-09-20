@@ -193,6 +193,12 @@ CROPS = {
     # lit bar; fr24's has the roundel beside the wordmark, with a clean gap at
     # column 44 of 129, and the roundel is very nearly square already.
     "EDG": ("fr24_banners", (0.000, 0.000, 0.349, 1.000)),
+    # Hyperion Aviation: the ring-and-swoosh symbol above its wordmark, from the
+    # white logo fetch_logo_art.py takes off their site (616x396, symbol in
+    # columns 151-556, rows 5-315, wordmark from row 350). The crop is squared
+    # about its centre, so its height is chosen to keep that square clear of the
+    # wordmark's faint top edge at row 350 rather than to match the symbol.
+    "HYP": ("fetched", (0.245, 0.000, 0.903, 0.742)),
 }
 
 # Worth recording a thing that did NOT work, so nobody spends the afternoon on

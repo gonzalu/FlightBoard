@@ -67,7 +67,17 @@ SOURCES = {
     # is a coloured field rather than a pale one, so strip_pale_field leaves it
     # be and GTR is listed in KNOCK_COLOURED_BG in make_logos.py to take it off.
     "GTR": "https://flygalistair.com/wp-content/uploads/2022/08/cropped-favicon-GTR_InfiniteAviation-192x192.jpg",
+    # Hyperion Aviation (Malta). Their favicon is the black ring-and-swoosh
+    # symbol, which would land on a glaring light tile; the white logo on their
+    # own dark header carries the same symbol above the wordmark, so that is the
+    # source, and CROPS in make_logos.py keeps only the symbol. It is white ink
+    # on a transparent field, so it is listed in KEEP_PALE below.
+    "HYP": "https://hyperion.aero/wp-content/uploads/2024/02/Hyperion-Logo-White.png",
 }
+
+# Art whose ink is itself white or pale, on a field that is already transparent.
+# strip_pale_field would take that ink for a white background and erase it.
+KEEP_PALE = {"HYP"}
 
 UA = "FlightBoard/1.0 (+https://github.com/gonzalu/FlightBoard)"
 PALE = 228          # a channel at or above this counts as part of a white field
@@ -128,7 +138,9 @@ def main():
             req = urllib.request.Request(url, headers={"User-Agent": UA})
             with urllib.request.urlopen(req, timeout=25) as r:
                 raw = r.read()
-            img = strip_pale_field(Image.open(io.BytesIO(raw)))
+            img = Image.open(io.BytesIO(raw)).convert("RGBA")
+            if code not in KEEP_PALE:
+                img = strip_pale_field(img)
             img.save(dest)
             print(f"{code}: {img.width}x{img.height} -> {dest}")
         except Exception as e:
