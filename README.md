@@ -425,19 +425,25 @@ Natural Earth is coarse close in. Below about 10 nm the coast turns to angles,
 because it only has a point every 0.9 nm or so. The dashboard can draw the same
 ground from OpenStreetMap instead, in the
 [Dark Matter](https://openmaptiles.org/styles/dark-matter/) style, which stays
-sharp all the way in. Add `?map=live` to the dashboard address:
+sharp all the way in. **It is the default.** To keep the built-in map and make
+no request to any map service, add `?map=static` to the dashboard address:
 
 ```
-http://YOUR-HOST:8090/dashboard.html?map=live
+http://YOUR-HOST:8090/dashboard.html?map=static
 ```
 
-It is per display, like `?debug=1`, and off everywhere else. Without it nothing
-here is fetched: no map library, no tiles, no request to any map service.
+That is per display, like `?debug=1`. With `?map=static` nothing here is fetched:
+no map library, no tiles.
 
 - **It needs the internet and WebGL** on whatever browser is showing the
   dashboard. The tiles come from [OpenFreeMap](https://openfreemap.org/), which
   asks for no key and sets no limits. If anything fails to load, the built-in
   map is drawn instead, exactly as before.
+- **Dark water, lighter land.** The style ships with the water a step lighter
+  than the land, which reads as the ground being a hole. The three lines
+  starting `const LIVE_` in `frontend/dashboard.js` (`LIVE_WATER`, `LIVE_LAND`,
+  `LIVE_PARK`) set the colours; edit, save and reload. Keep the land dimmer than
+  the aircraft.
 - **Roads, railways and boundaries are switched off** and the place names
   dimmed, so the map stays a backdrop: land, water, the names, and runway
   shapes close in.

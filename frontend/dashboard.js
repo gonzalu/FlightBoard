@@ -240,7 +240,7 @@ function paintBasemap(g, cx, cy, maxR, range) {
 }
 
 /*
- * An optional live map underneath, off unless the URL says ?map=live.
+ * A live map underneath, on unless the URL says ?map=static.
  *
  * The map above is deliberately coarse: Natural Earth has a point about every
  * 0.9 nm, which is fine at 40 nm and blocky at 4. This draws the same ground
@@ -260,7 +260,7 @@ function paintBasemap(g, cx, cy, maxR, range) {
  * projection they have always had: at 40 nm that puts them within two pixels of
  * where the map itself would draw them.
  */
-const LIVE_MAP = new URLSearchParams(location.search).get('map') === 'live';
+const LIVE_MAP = new URLSearchParams(location.search).get('map') !== 'static';
 const LIVE_STYLE = 'https://tiles.openfreemap.org/styles/dark';
 const LIVE_LIB_JS = 'https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.1/dist/maplibre-gl.js';
 const LIVE_LIB_JS_SRI = 'sha384-/L1njH4bbgNt9Uk3HwJ272N9fxJzRBQCxhtwGkZiqgl+Nxpq2ETUNZhNMNV1RgyW';
@@ -279,6 +279,20 @@ const LIVE_HIDE = [
   'boundary_state', 'boundary_country_z0-4', 'boundary_country_z5-',
 ];
 const LIVE_PLACE_OPACITY = 0.45;
+// The style ships with the water a step lighter than the land, which on a radar
+// reads as the ground being a hole. Reversed: dark water, lighter land, with
+// parks and woods one step brighter than the land so they stay a faint hint.
+const LIVE_WATER = '#060b0e';
+const LIVE_LAND = '#111b21';
+const LIVE_PARK = '#162229';
+const LIVE_PAINT = {
+  background: ['background-color', LIVE_LAND],
+  water: ['fill-color', LIVE_WATER],
+  waterway: ['line-color', LIVE_WATER],
+  landuse_residential: ['fill-color', LIVE_LAND],
+  landuse_park: ['fill-color', LIVE_PARK],
+  landcover_wood: ['fill-color', LIVE_PARK],
+};
 
 let liveMap = null;        // the map itself, once it has really loaded
 let livePane = null;       // the div it lives in
@@ -354,6 +368,7 @@ async function initLiveMap() {
     for (const layer of map.getStyle().layers) {
       if (LIVE_HIDE.includes(layer.id)) map.setLayoutProperty(layer.id, 'visibility', 'none');
       else if (layer.id.startsWith('place_')) map.setPaintProperty(layer.id, 'text-opacity', LIVE_PLACE_OPACITY);
+      else if (LIVE_PAINT[layer.id]) map.setPaintProperty(layer.id, ...LIVE_PAINT[layer.id]);
     }
     liveMap = map;
     mapCache = null;          // the drawn-in land has to come back off
