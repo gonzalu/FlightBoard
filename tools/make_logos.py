@@ -92,7 +92,11 @@ LIFT_TARGET_V = 225
 # pipeline takes FlightAware's navy wordmark, forces it dark and lets lift_ink
 # raise it to a proper JetBlue blue, which reads better on the panel. Prefer the
 # ordinary path over a special case.
-KNOCK_COLOURED_BG = set()
+# Galistair, whose favicon is a white infinity glyph on a solid crimson tile. The
+# field is coloured rather than pale, so the ordinary path keeps it and the whole
+# 28x28 lights up red - 784 of 784 pixels. Knocking it out leaves the glyph on
+# black at 86 lit, and the antialiased edge keeps a trace of the red.
+KNOCK_COLOURED_BG = {"GTR"}
 
 # Note on logo-sources/custom, which is passed first: it also holds artwork
 # picked over what the default directories would choose. Icelandair is the

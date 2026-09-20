@@ -60,6 +60,13 @@ SOURCES = {
     # alone on transparency at 48px, which is the second time a favicon has been
     # the right answer after PlaneSense - so check, despite the note below.
     "VJT": "https://www.vistajet.com/favicon.ico",
+    # Galistair. The archive has them only as a 4.25:1 banner - a grey wordmark
+    # beside a small red glyph - and squaring about that glyph drags in the first
+    # letter of the wordmark. Their favicon is the glyph alone, a white infinity
+    # on a crimson tile, which is also what their newer tails carry. That crimson
+    # is a coloured field rather than a pale one, so strip_pale_field leaves it
+    # be and GTR is listed in KNOCK_COLOURED_BG in make_logos.py to take it off.
+    "GTR": "https://flygalistair.com/wp-content/uploads/2022/08/cropped-favicon-GTR_InfiniteAviation-192x192.jpg",
 }
 
 UA = "FlightBoard/1.0 (+https://github.com/gonzalu/FlightBoard)"
