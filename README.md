@@ -73,8 +73,8 @@ bottom two rotate through whatever that flight can tell you.
 | **Arriving from / departing to**, when one end is your local airport | **Estimated arrival**, with a progress bar |
 
 There's a second view at `/dashboard` for when you have a big screen and want
-everything at once — a zoomable radar plus a tile per aircraft, as many as fit
-the window:
+everything at once — a radar you can zoom (scroll) and pan (drag), plus a tile
+per aircraft, as many as fit the window. Double-click the radar to put it back:
 
 ![dashboard](img/dashboard.png)
 

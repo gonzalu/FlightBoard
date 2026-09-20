@@ -63,7 +63,8 @@ main {
   min-height: 0;
 }
 /* the canvas sits above the optional live map and keeps the wheel to itself */
-#radar { cursor: crosshair; position: relative; z-index: 1; }
+#radar { cursor: grab; position: relative; z-index: 1; touch-action: none; }
+#radar.dragging { cursor: grabbing; }
 
 /* only present while the live map is in use (not with ?map=static) */
 #liveMap {

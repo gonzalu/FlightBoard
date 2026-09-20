@@ -28,6 +28,9 @@ let sweep = 0;
 let latest = { aircraft: [], max_range_nm: 40, sources: [] };
 let rangeNm = null;          // null until the first response sets it
 let radarSize = 600;
+// Where the middle of the radar is, in nm east and north of home. Zero is the
+// radar as it always was, centred on you; dragging moves it.
+let panE = 0, panN = 0;
 
 function statusColor(ac) {
   if (ac.on_ground) return DIM;
@@ -153,7 +156,7 @@ function drawBasemap(w, cx, cy, maxR, range) {
   const dpr = window.devicePixelRatio || 1;
   // Font status is part of the key so labels drawn in the fallback font, before
   // Doto has loaded, are redrawn once it has.
-  const key = `${w}|${dpr}|${range}|${liveMap ? 'live' : ''}|${document.fonts ? document.fonts.status : ''}`;
+  const key = `${w}|${dpr}|${range}|${panE}|${panN}|${liveMap ? 'live' : ''}|${document.fonts ? document.fonts.status : ''}`;
   if (!mapCache || mapCache.key !== key) {
     const cv = (mapCache && mapCache.canvas) || document.createElement('canvas');
     cv.width = cv.height = Math.round(w * dpr);
@@ -165,11 +168,14 @@ function drawBasemap(w, cx, cy, maxR, range) {
   ctx.drawImage(mapCache.canvas, 0, 0, w, w);
 }
 
+// (cx, cy) is the middle of the view and clips it; the map's own points are
+// nm from home, so they are placed from (hx, hy), where home falls on screen.
 function paintBasemap(g, cx, cy, maxR, range) {
   const k = maxR / range;
+  const hx = cx - panE * k, hy = cy + panN * k;
   const trace = (pts, close) => {
-    g.moveTo(cx + pts[0] * k, cy - pts[1] * k);
-    for (let i = 2; i < pts.length; i += 2) g.lineTo(cx + pts[i] * k, cy - pts[i + 1] * k);
+    g.moveTo(hx + pts[0] * k, hy - pts[1] * k);
+    for (let i = 2; i < pts.length; i += 2) g.lineTo(hx + pts[i] * k, hy - pts[i + 1] * k);
     if (close) g.closePath();
   };
 
@@ -214,8 +220,8 @@ function paintBasemap(g, cx, cy, maxR, range) {
 
   // Airports sit on top. Labels are placed nearest first and dropped where they
   // would land on another label, the home marker or a ring's distance.
-  const taken = [[cx - 6, cy - 6, 12, 12]];
-  for (let i = 1; i <= 4; i++) taken.push([cx + 2, cy - (maxR * i) / 4 - 13, 32, 12]);
+  const taken = [[hx - 6, hy - 6, 12, 12]];
+  for (let i = 1; i <= 4; i++) taken.push([hx + 2, hy - (maxR * i) / 4 - 13, 32, 12]);
   const clear = b => !taken.some(t =>
     b[0] < t[0] + t[2] && t[0] < b[0] + b[2] && b[1] < t[1] + t[3] && t[1] < b[1] + b[3]);
 
@@ -223,8 +229,8 @@ function paintBasemap(g, cx, cy, maxR, range) {
   g.textBaseline = 'middle';
   g.strokeStyle = g.fillStyle = MAP_AIRPORT;
   for (const [code, e, n] of BASEMAP.airports || []) {
-    if (Math.hypot(e, n) > range) continue;
-    const x = cx + e * k, y = cy - n * k;
+    const x = hx + e * k, y = hy - n * k;
+    if (Math.hypot(x - cx, y - cy) > maxR) continue;
     g.beginPath();
     g.arc(x, y, 2.5, 0, Math.PI * 2);
     g.stroke();
@@ -296,7 +302,7 @@ const LIVE_PAINT = {
 
 let liveMap = null;        // the map itself, once it has really loaded
 let livePane = null;       // the div it lives in
-let liveZoom = null;       // last zoom pushed, so it only moves when it must
+let liveZoom = null;       // last centre and zoom pushed, so it only moves when it must
 
 function loadAsset(tag, attrs) {
   return new Promise((resolve, reject) => {
@@ -308,10 +314,16 @@ function loadAsset(tag, attrs) {
 }
 
 // The scale the radar is drawing at, expressed the way a web map wants it.
-function liveZoomFor(range) {
+function liveZoomFor(range, lat = latest.home.lat) {
   const maxR = radarSize / 2 - 24;
   const metresPerPixel = (range * 1852) / maxR;
-  return Math.log2(40075016.686 * Math.cos(latest.home.lat * Math.PI / 180) / (512 * metresPerPixel));
+  return Math.log2(40075016.686 * Math.cos(lat * Math.PI / 180) / (512 * metresPerPixel));
+}
+
+// The middle of the view as a place on the map: home, moved by the pan.
+function liveCentre() {
+  const h = latest.home;
+  return [h.lon + panE / (60 * Math.cos(h.lat * Math.PI / 180)), h.lat + panN / 60];
 }
 
 // Required by the licence on the tiles, and it belongs on the map itself.
@@ -384,10 +396,12 @@ async function initLiveMap() {
 
 function syncLiveMap(range) {
   if (!liveMap) return;
-  const zoom = liveZoomFor(range);
-  if (zoom === liveZoom) return;
-  liveMap.jumpTo({ center: [latest.home.lon, latest.home.lat], zoom });
-  liveZoom = zoom;
+  const center = liveCentre();
+  const zoom = liveZoomFor(range, center[1]);
+  const view = `${zoom}|${center[0]}|${center[1]}`;
+  if (view === liveZoom) return;
+  liveMap.jumpTo({ center, zoom });
+  liveZoom = view;
 }
 
 /* ---------- radar ---------- */
@@ -414,10 +428,20 @@ function drawRadar() {
   const w = radarSize, cx = w / 2, cy = w / 2;
   const maxR = w / 2 - 24;
   const range = rangeNm || latest.max_range_nm || 40;
+  const k = maxR / range;
+  // Home is where the rings, the crosshair and the sweep are centred. Unpanned
+  // that is the middle of the view; panned it can be anywhere, or off it.
+  const hx = cx - panE * k, hy = cy + panN * k;
+  const homeInView = Math.hypot(hx - cx, hy - cy) <= maxR;
 
   syncLiveMap(range);
   ctx.clearRect(0, 0, w, w);
   drawBasemap(w, cx, cy, maxR, range);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, maxR, 0, Math.PI * 2);
+  ctx.clip();
 
   ctx.strokeStyle = '#1a2732';
   ctx.lineWidth = 1;
@@ -425,35 +449,37 @@ function drawRadar() {
   for (let i = 1; i <= 4; i++) {
     const r = (maxR * i) / 4;
     ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.arc(hx, hy, r, 0, Math.PI * 2);
     ctx.stroke();
     ctx.fillStyle = DIM;
-    ctx.fillText(`${(range * i / 4).toFixed(range < 8 ? 1 : 0)}nm`, cx + 3, cy - r - 3);
+    ctx.fillText(`${(range * i / 4).toFixed(range < 8 ? 1 : 0)}nm`, hx + 3, hy - r - 3);
   }
   ctx.beginPath();
-  ctx.moveTo(cx, cy - maxR); ctx.lineTo(cx, cy + maxR);
-  ctx.moveTo(cx - maxR, cy); ctx.lineTo(cx + maxR, cy);
+  ctx.moveTo(hx, hy - maxR); ctx.lineTo(hx, hy + maxR);
+  ctx.moveTo(hx - maxR, hy); ctx.lineTo(hx + maxR, hy);
   ctx.stroke();
 
   const rad = (sweep * Math.PI) / 180;
-  ctx.save();
   ctx.beginPath();
-  ctx.moveTo(cx, cy);
-  ctx.arc(cx, cy, maxR, rad - 0.45, rad);
+  ctx.moveTo(hx, hy);
+  ctx.arc(hx, hy, maxR, rad - 0.45, rad);
   ctx.closePath();
   ctx.fillStyle = 'rgba(58,167,255,0.07)';
   ctx.fill();
   ctx.restore();
 
-  ctx.fillStyle = LED;
-  ctx.fillRect(cx - 2, cy - 2, 4, 4);
+  if (homeInView) {
+    ctx.fillStyle = LED;
+    ctx.fillRect(hx - 2, hy - 2, 4, 4);
+  } else {
+    drawHomePointer(cx, cy, maxR, hx, hy);
+  }
 
   for (const ac of latest.aircraft) {
-    if (ac.distance_nm > range) continue;
-    const r = (ac.distance_nm / range) * maxR;
     const b = (ac.bearing_deg * Math.PI) / 180;
-    const x = cx + r * Math.sin(b);
-    const y = cy - r * Math.cos(b);
+    const x = cx + (ac.distance_nm * Math.sin(b) - panE) * k;
+    const y = cy - (ac.distance_nm * Math.cos(b) - panN) * k;
+    if (Math.hypot(x - cx, y - cy) > maxR) continue;
 
     ctx.save();
     ctx.translate(x, y);
@@ -473,28 +499,106 @@ function drawRadar() {
   sweep = (sweep + 1.2) % 360;
 }
 
+// With home panned out of view, a small arrow on the rim points back to it, so
+// the way home is never lost.
+function drawHomePointer(cx, cy, maxR, hx, hy) {
+  const ang = Math.atan2(hx - cx, -(hy - cy));       // bearing from the view's middle to home
+  const px = cx + Math.sin(ang) * (maxR - 4), py = cy - Math.cos(ang) * (maxR - 4);
+  ctx.save();
+  ctx.translate(px, py);
+  ctx.rotate(ang);
+  ctx.fillStyle = LED;
+  ctx.beginPath();
+  ctx.moveTo(0, -5); ctx.lineTo(5, 4); ctx.lineTo(-5, 4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+  const away = Math.hypot(panE, panN);
+  ctx.font = '10px Doto, monospace';
+  ctx.fillStyle = LED;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(`home ${away.toFixed(away < 8 ? 1 : 0)}nm`,
+    cx + Math.sin(ang) * (maxR - 32), cy - Math.cos(ang) * (maxR - 32));
+  ctx.textAlign = 'start';
+  ctx.textBaseline = 'alphabetic';
+}
+
+// Far enough to see past the edge of your own range and no further; beyond that
+// there is nothing to look at and it is only easy to get lost.
+function setPan(e, n) {
+  const max = (latest.max_range_nm || 40) * 1.5;
+  const d = Math.hypot(e, n);
+  const f = d > max ? max / d : 1;
+  panE = e * f;
+  panN = n * f;
+  updateRangeLabel();
+}
+
+function setRange(next, px = 0, py = 0) {
+  const max = (latest.max_range_nm || 40) * 1.5;
+  const cur = rangeNm || latest.max_range_nm || 40;
+  const range = Math.max(1, Math.min(max, next));
+  // Keep whatever is under the pointer where it is: (px, py) is the pointer in
+  // pixels from the middle of the view. Zooming from the middle passes zero.
+  const maxR = radarSize / 2 - 24;
+  const kOld = maxR / cur, kNew = maxR / range;
+  rangeNm = range;
+  setPan(panE + px / kOld - px / kNew, panN - py / kOld + py / kNew);
+}
+
 canvas.addEventListener('wheel', e => {
   e.preventDefault();
-  const max = (latest.max_range_nm || 40) * 1.5;
-  const next = (rangeNm || latest.max_range_nm || 40) * (e.deltaY > 0 ? 1.15 : 1 / 1.15);
-  rangeNm = Math.max(1, Math.min(max, next));
-  updateRangeLabel();
+  const r = canvas.getBoundingClientRect();
+  setRange((rangeNm || latest.max_range_nm || 40) * (e.deltaY > 0 ? 1.15 : 1 / 1.15),
+           e.clientX - r.left - radarSize / 2, e.clientY - r.top - radarSize / 2);
 }, { passive: false });
+
+// Dragging moves the map under the pointer, so the middle of the view moves the
+// other way.
+let drag = null;
+canvas.addEventListener('pointerdown', e => {
+  if (e.button !== 0) return;
+  drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
+  canvas.setPointerCapture(e.pointerId);
+  canvas.classList.add('dragging');
+});
+canvas.addEventListener('pointermove', e => {
+  if (!drag || e.pointerId !== drag.id) return;
+  const k = (radarSize / 2 - 24) / (rangeNm || latest.max_range_nm || 40);
+  setPan(panE - (e.clientX - drag.x) / k, panN + (e.clientY - drag.y) / k);
+  drag.x = e.clientX;
+  drag.y = e.clientY;
+});
+const endDrag = e => {
+  if (!drag || e.pointerId !== drag.id) return;
+  drag = null;
+  canvas.classList.remove('dragging');
+};
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
 
 canvas.addEventListener('dblclick', () => {
   rangeNm = latest.max_range_nm || 40;
+  panE = panN = 0;
   updateRangeLabel();
 });
 
+const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+
 function updateRangeLabel() {
   const r = rangeNm || latest.max_range_nm || 40;
+  const away = Math.hypot(panE, panN);
+  const bearing = (Math.atan2(panE, panN) * 180 / Math.PI + 360) % 360;
+  const panned = away >= 0.05
+    ? ` · ${away.toFixed(away < 8 ? 1 : 0)} nm ${COMPASS[Math.round(bearing / 45) % 8]} of home` : '';
   const note = liveMap ? ' · live map'
     : !haveBasemap() || !latest.home ? ''
     : !basemapFitsHome() ? ' · map is for another home: rerun tools/make_basemap.py'
-    : r > BASEMAP.radius_nm ? ` · map ends at ${BASEMAP.radius_nm} nm`
+    : r + away > BASEMAP.radius_nm ? ` · map ends at ${BASEMAP.radius_nm} nm`
     : '';
   rangeLabelEl.textContent =
-    `range ${r < 8 ? r.toFixed(1) : Math.round(r)} nm — scroll to zoom, double-click to reset${note}`;
+    `range ${r < 8 ? r.toFixed(1) : Math.round(r)} nm${panned} — scroll to zoom, drag to pan, double-click to reset${note}`;
 }
 
 /* ---------- tiles ---------- */
