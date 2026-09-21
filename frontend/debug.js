@@ -68,6 +68,10 @@ const Debug = (() => {
           ` · airlines ${db.airlines} · countries ${nn(db.code_blocks)}`
         : `local db    NOT BUILT - run tools/fetch_standing_data.py (online lookups only)`,
       `settings    ${nn(g.settings_from)}`,
+      ...(g.aeroapi && g.aeroapi.enabled ? [`aeroapi     ${g.aeroapi.state}` +
+        (g.aeroapi.detail ? ` (${g.aeroapi.detail})` : '') +
+        `   $${g.aeroapi.spent} of $${g.aeroapi.cap} in ${g.aeroapi.month}` +
+        `   ${g.aeroapi.calls} calls   ${g.aeroapi.cached} flights known`] : []),
     ];
     if (d.filters_error) lines.push(`FILTERS BROKEN  ${d.filters_error}`);
     if (d.last_error) lines.push(`last error  ${d.last_error}`);
@@ -108,7 +112,7 @@ const Debug = (() => {
     if (rt.origin || rt.destination) {
       lines.push(`            ${nn(rt.origin)} > ${nn(rt.destination)}` +
                  (rt.progress != null ? `   ${Math.round(rt.progress * 100)}% flown` : '') +
-                 (rt.eta_min != null ? `   eta ${rt.eta_min}min` : '') +
+                 (rt.eta_min != null ? `   eta ${rt.eta_min}min${rt.eta_src === 'aeroapi' ? ' (aeroapi)' : ''}` : '') +
                  (rt.phase ? `   ${rt.phase}` : ''));
     }
     if (dbg.guard) {

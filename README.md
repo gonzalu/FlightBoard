@@ -40,6 +40,7 @@ uses, and every dot you see is an individually addressed LED.
   * [Better routes (optional)](#better-routes-optional)
   * [A map under the radar (optional)](#a-map-under-the-radar-optional)
     + [A sharper map, live from OpenStreetMap](#a-sharper-map-live-from-openstreetmap)
+  * [Real flight times (optional)](#real-flight-times-optional)
   * [Getting it onto a TV](#getting-it-onto-a-tv)
     + [Option A — Chromecast](#option-a--chromecast)
     + [Option B — Raspberry Pi on HDMI](#option-b--raspberry-pi-on-hdmi)
@@ -453,6 +454,85 @@ no map library, no tiles.
   where it is.
 - The map library is fetched from a CDN, pinned to one version and checked
   against a hash.
+
+---
+
+## Real flight times (optional)
+
+Everything above is free. This one is metered, so it is off until you switch it
+on and it will not spend a cent you have not allowed.
+
+Without it, the "arriving in 42 min" figure is distance divided by ground
+speed. That is honest for most flights and wrong for a few: a headwind, a
+holding pattern, or an aircraft still climbing all bend it. With it, FlightBoard
+asks [FlightAware's AeroAPI](https://www.flightaware.com/aeroapi/) for the
+flight's own estimated arrival and uses that instead, on the panel and the
+dashboard alike. The debug band marks which figure it is showing.
+
+### What you need
+
+A FlightAware account and an AeroAPI key. Two facts about cost, both of which
+FlightAware sets and can change, so check their current pricing rather than
+trusting this page:
+
+- **AeroAPI is billed per request.** Nothing is free by default.
+- **If you feed FlightAware with PiAware, you get a monthly credit that a
+  non-feeder does not,** and it is larger than the credit on the free
+  personal tier. Feeders can turn this on and reasonably expect to stay inside
+  it. Everyone else should set a low cap (below) or leave it off.
+
+### Turning it on
+
+Add your key to `flightboard.env` and restart the backend:
+
+```
+FLIGHTBOARD_AEROAPI_KEY=your-key-here
+FLIGHTBOARD_AEROAPI_MONTHLY_CAP=5
+```
+
+`FLIGHTBOARD_AEROAPI_MONTHLY_CAP` is in dollars and **defaults to 5**. Set it to
+the most you are willing to spend in a calendar month, and no higher than your
+credit if you have one.
+
+### How it keeps the bill small
+
+- **Only what someone can see.** Just the nearest five aircraft
+  (`FLIGHTBOARD_AEROAPI_NEAREST`) are ever looked up, and only airborne ones with
+  a callsign. Aircraft hidden by your filters cost nothing.
+- **Once per flight.** An answer is reused for 20 minutes
+  (`FLIGHTBOARD_AEROAPI_TTL`), however many times the board redraws it.
+- **A hard monthly cap.** Spend is counted by FlightBoard itself, in
+  `data/aeroapi-usage.json`, so a restart does not reset it. When the next lookup
+  would take you past the cap, lookups stop until the month rolls over. The
+  count assumes each lookup costs `FLIGHTBOARD_AEROAPI_CALL_COST` (default
+  `0.005`); check that against your plan's price list and change it if it
+  differs, because the cap is only as accurate as that number.
+- **Paced.** One lookup at a time, at least seven seconds apart, which stays
+  inside the free tier's rate limit.
+
+### When it goes wrong
+
+It never breaks the board. Any failure means the extra times are missing and
+everything falls back to the built-in estimate, exactly as if the feature were
+off. What you see in the log, and in `debug.aeroapi` when you ask for
+`/api/aircraft?debug=1`, says why:
+
+| State | Means | What it does |
+|---|---|---|
+| `off` | No key is set. | Nothing runs. |
+| `bad-key` | AeroAPI rejected the key (401). | Pauses an hour, then tries again. |
+| `no-access` | Your plan does not include this (403). | Pauses an hour. |
+| `no-credit` | No credit, or a billing problem (402). | Pauses an hour, so topping up heals it without a restart. |
+| `rate-limited` | Too many requests a minute (429). | Waits as long as AeroAPI asks, at least a few seconds. |
+| `unreachable` | Network trouble, or AeroAPI is having an outage. | Pauses a minute. |
+| `budget` | Your own monthly cap is reached. | Quiet until next month, or raise the cap and restart. |
+
+The log says each of these once, when it starts, rather than once per aircraft.
+
+Only successful lookups are counted against your cap, because those are the only
+ones AeroAPI bills for. A flight AeroAPI has never heard of is also a successful
+lookup: it costs the same, and the empty answer is remembered so it is not
+asked again straight away.
 
 ---
 
@@ -965,6 +1045,11 @@ you *hide* is separate, and lives in `filters.json` — see
 | `FLIGHTBOARD_ENABLE_ENRICH` | `1` | Set `0` to disable adsbdb and hexdb lookups and run fully offline. |
 | `FLIGHTBOARD_ENRICH_TTL` | `3600` | Seconds to cache an airline/route/type lookup. |
 | `FLIGHTBOARD_ENRICH_FAIL_TTL` | `300` | Seconds to cache a lookup that found *nothing*. Shorter on purpose: a hit is a fact about an aircraft, a miss is often just a service having a bad minute. |
+| `FLIGHTBOARD_AEROAPI_KEY` | *(unset)* | FlightAware AeroAPI key. Unset means the feature is off. See [Real flight times](#real-flight-times-optional). |
+| `FLIGHTBOARD_AEROAPI_MONTHLY_CAP` | `5` | Most you will spend on AeroAPI in a calendar month, in dollars. |
+| `FLIGHTBOARD_AEROAPI_CALL_COST` | `0.005` | What one lookup is counted as costing. Check it against your plan. |
+| `FLIGHTBOARD_AEROAPI_NEAREST` | `5` | How many of the nearest aircraft are looked up. |
+| `FLIGHTBOARD_AEROAPI_TTL` | `1200` | Seconds an answer is reused before that flight is asked about again. |
 | `FLIGHTBOARD_DEBUG` | `0` | `1` shows the diagnostic bands on every display. Any single display can override it with `?debug=1` or `?debug=0` — see [Debug mode](#debug-mode). |
 | `FLIGHTBOARD_PORT` | `8090` | Port. |
 

@@ -15,7 +15,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import config, filters, routes_db
+from . import aeroapi, config, filters, routes_db
 from .geo import bearing_deg, haversine_nm
 
 logging.basicConfig(level=logging.INFO)
@@ -466,6 +466,25 @@ def _excluded(rules, hexid, flight, altitude):
     return False
 
 
+def _apply_aeroapi(entry, leg, flight):
+    """Prefer AeroAPI's arrival estimate to our distance-over-speed guess.
+
+    Reads the cache only. Absent, expired or failed lookups leave the computed
+    figure exactly as it was, which is the whole failure mode.
+    """
+    fa = aeroapi.get(flight)
+    if not fa:
+        return
+    entry["times"] = {k: fa.get(k) for k in ("off", "sched_in", "eta", "delay_min")
+                      if fa.get(k) is not None}
+    # A departing aircraft has no ETA on purpose (see _leg): its own climb rate
+    # says it is leaving, and an arrival time for the flight it just left would
+    # be the one figure on the board that is certainly not about this aircraft.
+    if fa.get("eta") and leg.get("phase") != "departing":
+        leg["eta_min"] = max(0, round((fa["eta"] - time.time()) / 60))
+        leg["eta_src"] = "aeroapi"
+
+
 def _entry(ac):
     """One aircraft from a receiver, or None if it is out of range or excluded."""
     lat, lon = ac.get("lat"), ac.get("lon")
@@ -507,6 +526,7 @@ def _entry(ac):
             if route:
                 route = _current_leg(route, lat, lon)
                 leg = _leg(route, lat, lon, entry["gs"], ac.get("baro_rate"))
+                _apply_aeroapi(entry, leg, flight)
                 if rules.hides_route(leg):
                     return None
                 # A route the aircraft cannot be on is worse than no route: it
@@ -600,6 +620,9 @@ async def _poll_loop():
             if any(s["ok"] for s in sources):
                 out = sorted((e for _, e in merged.values()), key=lambda a: a["distance_nm"])
                 _state["aircraft"] = out[: config.MAX_AIRCRAFT]
+                if aeroapi.enabled():
+                    aeroapi.wanted([a["flight"] for a in out[: config.AEROAPI_NEAREST]
+                                    if a["flight"] and not a["on_ground"]])
                 _state["updated"] = time.time()
                 _state["last_error"] = None
             else:
@@ -641,6 +664,8 @@ async def lifespan(app: FastAPI):
     tasks = [asyncio.create_task(_poll_loop())]
     if config.ENABLE_ENRICH:
         tasks.append(asyncio.create_task(_enrich_worker()))
+    if aeroapi.enabled():
+        tasks.append(asyncio.create_task(aeroapi.worker()))
     yield
     for t in tasks:
         t.cancel()
@@ -692,6 +717,7 @@ def _debug_state():
         "cache": {"entries": len(_enrich_cache), "hits": hits,
                   "misses": len(_enrich_cache) - hits, "queued": len(_queued)},
         "local_db": routes_db.stats(),
+        "aeroapi": aeroapi.status(),
         "poll_interval_s": config.POLL_INTERVAL,
         "max_aircraft": config.MAX_AIRCRAFT,
     }
