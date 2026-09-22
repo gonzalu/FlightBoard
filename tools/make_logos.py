@@ -73,6 +73,11 @@ BACKGROUND = {
     # Qatar's maroon oryx is dark and only moderately saturated, same case as
     # LOT. Lifted onto black it reads as a bright oryx instead of a grey square.
     "QTR": "dark",
+    # Condor's circled-bird symbol is pure black ink (value 0, saturation 0),
+    # which the rule reads as line art meant for a light tile - the same
+    # glaring-card outcome the mark was fetched from a different source to
+    # avoid. Forcing it dark makes lift_ink turn the silhouette white instead.
+    "CFG": "dark",
 }
 
 # Ink dimmer than this (HSV value, not luminance, so saturated reds aren't
@@ -199,6 +204,12 @@ CROPS = {
     # about its centre, so its height is chosen to keep that square clear of the
     # wordmark's faint top edge at row 350 rather than to match the symbol.
     "HYP": ("fetched", (0.245, 0.000, 0.903, 0.742)),
+    # Condor: the circled-bird symbol at the right end of their newsroom
+    # lockup (3500x592). Measured off the ink itself, not guessed: the
+    # wordmark's glyphs run in six evenly spaced columns up to x=2709, then a
+    # gap, then the symbol fills x=2908-3500 exactly square against the
+    # image height. square_crop reproduces (2908,0)-(3500,592) unchanged.
+    "CFG": ("fetched", (0.831, 0.000, 1.000, 1.000)),
 }
 
 # Worth recording a thing that did NOT work, so nobody spends the afternoon on

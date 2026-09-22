@@ -73,6 +73,15 @@ SOURCES = {
     # source, and CROPS in make_logos.py keeps only the symbol. It is white ink
     # on a transparent field, so it is listed in KEEP_PALE below.
     "HYP": "https://hyperion.aero/wp-content/uploads/2024/02/Hyperion-Logo-White.png",
+    # Condor. The bulk archive's art is the same circled-condor symbol but
+    # downsampled from something small, so it lights the whole tile as a grey
+    # glare. This is their own newsroom download instead: black ink, 592x592,
+    # squared off the right-hand end of the wordmark+symbol lockup, in
+    # CROPS below. Black ink on a stripped white field lifts to white
+    # automatically in make_logos.build() (the same path a pure-black
+    # silhouette always takes), so this needs no KEEP_PALE entry.
+    "CFG": "https://condor-newsroom.condor.com/fileadmin/dam/condor/Pictures_Pages/"
+           "Download/00_Logo___Branding/Condor_Logo.png",
 }
 
 # Art whose ink is itself white or pale, on a field that is already transparent.
