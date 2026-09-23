@@ -88,6 +88,23 @@ SOURCES = {
 # strip_pale_field would take that ink for a white background and erase it.
 KEEP_PALE = {"HYP"}
 
+# Art whose canvas already carries real transparency outside its own bounding
+# box, but is fully opaque *inside* it - a white disc enclosed by a black ring,
+# in Condor's case. strip_pale_field's border flood-fill removes the outer
+# margin but can never cross the ring to reach the disc, since it isn't
+# connected to the border. That leaves the file with alpha extrema (0, 255),
+# which trips make_logos.load_rgba's "already carries real transparency" early
+# return - the one meant for art that needs no further stripping - and the
+# enclosed white disc survives as opaque ink, filling most of the tile.
+# Flattening onto white first removes the pre-existing transparency, so
+# load_rgba's own corner-colour stripper runs instead: unlike the flood-fill,
+# it tests every pixel by colour, not by reachability, so it clears the
+# enclosed disc along with the margin. These are skipped from strip_pale_field
+# for the same reason HYP is kept from it, so the flattened file isn't
+# reperforated before it gets there.
+FLATTEN_ONTO_WHITE = {"CFG"}
+KEEP_PALE |= FLATTEN_ONTO_WHITE
+
 UA = "FlightBoard/1.0 (+https://github.com/gonzalu/FlightBoard)"
 PALE = 228          # a channel at or above this counts as part of a white field
 
@@ -148,6 +165,10 @@ def main():
             with urllib.request.urlopen(req, timeout=25) as r:
                 raw = r.read()
             img = Image.open(io.BytesIO(raw)).convert("RGBA")
+            if code in FLATTEN_ONTO_WHITE:
+                flat = Image.new("RGBA", img.size, (255, 255, 255, 255))
+                flat.alpha_composite(img)
+                img = flat
             if code not in KEEP_PALE:
                 img = strip_pale_field(img)
             img.save(dest)
