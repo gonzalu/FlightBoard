@@ -636,6 +636,36 @@ Open the URL and press F11. Perfectly good on a spare monitor.
 
 ## Keeping it up to date
 
+**The easy way.** `tools/flightboard.py` does everything in this section for you,
+and only the parts your install needs:
+
+```bash
+cd ~/flightboard && python3 tools/flightboard.py
+```
+
+That opens a short menu. `update` fetches, works out from what changed and from
+what is already stale on this machine which of the steps below apply, lists them,
+asks once, and runs them: the pull (with `--autostash`), the logo rebuild, the
+database and map rebuilds, and the restart. Other menu entries show what is running
+and what is out of date, rebuild one thing, or follow the log. The same commands
+work directly, which is what a script wants:
+
+```bash
+python3 tools/flightboard.py update --dry-run   # show the plan, change nothing
+python3 tools/flightboard.py update --yes       # no question, for unattended use
+python3 tools/flightboard.py status
+```
+
+Use the system `python3`, not the one in `.venv`: the logo generator needs Pillow,
+which the backend does not. It only ever considers things you already use, so
+nobody who skipped the logos or the map is nudged into building them. A rebuild
+refuses to replace `logos.js` if the archive download looks incomplete or the new
+file has far fewer logos than the old one, and keeps the old file as
+`logo-sources/logos.js.prev`.
+
+**By hand.** Everything the tool does is below, should you want to do it yourself
+or see why it did something.
+
 Most of the time this is the whole thing, and the restart is harmless when it
 wasn't needed:
 

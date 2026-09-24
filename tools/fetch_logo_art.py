@@ -36,7 +36,9 @@ output path is gitignored.
 """
 
 import argparse
+import hashlib
 import io
+import json
 import os
 import urllib.request
 
@@ -111,6 +113,24 @@ KEEP_PALE = {"HYP"}
 FLATTEN_ONTO_WHITE = {"CFG"}
 KEEP_PALE |= FLATTEN_ONTO_WHITE
 
+# Bump this when strip_pale_field or the flattening above changes how a fetched
+# file is processed, so every file already on disk is fetched again.
+PROCESSING_VERSION = 1
+
+
+def recipe(code):
+    """Fingerprint of everything that decides what a fetched file looks like.
+
+    A file already on disk used to be trusted forever, so changing a source URL
+    or how it was processed left the old result in place until someone deleted
+    it by hand: Condor's fixed download was skipped for exactly that reason. The
+    fingerprint is stored beside the files, and a mismatch means fetch it again.
+    """
+    blob = json.dumps([PROCESSING_VERSION, SOURCES[code], code in KEEP_PALE,
+                       code in FLATTEN_ONTO_WHITE])
+    return hashlib.sha1(blob.encode()).hexdigest()[:12]
+
+
 UA = "FlightBoard/1.0 (+https://github.com/gonzalu/FlightBoard)"
 PALE = 228          # a channel at or above this counts as part of a white field
 
@@ -161,11 +181,20 @@ def main():
 
     from PIL import Image
 
+    record = os.path.join(args.out, ".recipes.json")
+    try:
+        with open(record, encoding="utf-8") as f:
+            known = json.load(f)
+    except (OSError, ValueError):
+        known = {}
+
     for code, url in sorted(SOURCES.items()):
         dest = os.path.join(args.out, code + ".png")
         if os.path.exists(dest) and not args.force:
-            print(f"{code}: already have it")
-            continue
+            if known.get(code) == recipe(code):
+                print(f"{code}: already have it")
+                continue
+            print(f"{code}: recipe changed, fetching again")
         try:
             req = urllib.request.Request(url, headers={"User-Agent": UA})
             with urllib.request.urlopen(req, timeout=25) as r:
@@ -178,9 +207,13 @@ def main():
             if code not in KEEP_PALE:
                 img = strip_pale_field(img)
             img.save(dest)
+            known[code] = recipe(code)
             print(f"{code}: {img.width}x{img.height} -> {dest}")
         except Exception as e:
             print(f"{code}: failed ({e})")
+
+    with open(record, "w", encoding="utf-8") as f:
+        json.dump(known, f, indent=1, sort_keys=True)
 
 
 if __name__ == "__main__":
