@@ -82,6 +82,12 @@ SOURCES = {
     # silhouette always takes), so this needs no KEEP_PALE entry.
     "CFG": "https://condor-newsroom.condor.com/fileadmin/dam/condor/Pictures_Pages/"
            "Download/00_Logo___Branding/Condor_Logo.png",
+    # Slate Aviation. The archive's art is fine line art on white, which reduced
+    # to noise and sent SGX to a tail fin. Their own app icon is a tail fin with
+    # a white S, on a pale field. strip_pale_field clears the field and stops at
+    # the fin, so the S, enclosed by it, survives.
+    "SGX": "https://www.flyslate.com/wp-content/themes/slate/img/favicon/"
+           "android-icon-192x192.png",
 }
 
 # Art whose ink is itself white or pale, on a field that is already transparent.

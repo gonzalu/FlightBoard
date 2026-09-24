@@ -128,8 +128,9 @@ PREFER_SOURCE = {
 
 # Carriers whose artwork is rejected outright, so they fall back to the
 # generated tail fin. Not every mark can survive 28 pixels: Tradewind's is a
-# ring of ten tiny aircraft and Slate's a fine line drawing, and both reduce to
-# scattered specks on a glaring pale tile. The fin is plainly better.
+# ring of ten tiny aircraft, which reduces to scattered specks on a glaring pale
+# tile. The fin is plainly better. (Slate's fine line drawing used to be here
+# too, until fetch_logo_art.py found its app icon instead.)
 #
 # This has to be judged by eye. The obvious proxy - how much of the tile is ink
 # rather than background - does not work: Tradewind measures 20% and Spirit,
@@ -148,9 +149,10 @@ ALLOW_SPARSE = {
 }
 
 PREFER_TAIL_FIN = {
-    # Tradewind was here until its mark was redrawn by hand at 28x28 rather
-    # than reduced to it; see the pass-through in build() below.
-    "SGX",   # Slate Aviation - fine line art on white
+    # Empty. Tradewind left when its mark was redrawn by hand at 28x28 rather
+    # than reduced to it; see the pass-through in build() below. Slate (SGX)
+    # left when tools/fetch_logo_art.py found its favicon: the archive's line
+    # art on white was noise, but their own tail-fin-and-S icon is not.
 }
 
 # Carriers where only one directory's artwork is acceptable and everything else
