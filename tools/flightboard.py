@@ -445,6 +445,17 @@ def cmd_status(_args=None):
         else "  database   not built (optional)")
     say(f"  map        {age(BASEMAP_JS)}" if BASEMAP_JS.exists()
         else "  map        not built (optional)")
+    try:
+        from backend import config
+        history = Path(config.METRICS_FILE)
+        if not config.METRICS:
+            say("  metrics    switched off")
+        elif history.exists():
+            say(f"  metrics    {history.stat().st_size / 1e6:.1f} MB, last written {age(history)}")
+        else:
+            say("  metrics    nothing written yet")
+    except Exception:
+        pass
     if steps:
         say("\nOut of date here:")
         for key, why in steps:

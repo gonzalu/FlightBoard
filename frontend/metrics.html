@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FlightBoard metrics</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="alternate icon" href="favicon.ico" sizes="any">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Doto:wght@400..900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="metrics.css">
+</head>
+<body>
+  <header id="hdr">
+    <div id="title">METRICS</div>
+    <nav id="nav" aria-label="Views">
+      <a href="/">Panel</a>
+      <a href="/dashboard.html">Dashboard</a>
+      <a href="/logos.html">Logos</a>
+      <a href="https://github.com/gonzalu/FlightBoard" target="_blank" rel="noopener noreferrer">GitHub</a>
+    </nav>
+    <div id="ranges" role="group" aria-label="Time range">
+      <button data-range="24h">24h</button>
+      <button data-range="7d">7 days</button>
+      <button data-range="30d">30 days</button>
+      <button data-range="1y">1 year</button>
+    </div>
+  </header>
+
+  <main id="page">
+    <p id="notice" hidden></p>
+
+    <section id="tiles" aria-label="Summary"></section>
+
+    <h2>Traffic</h2>
+    <div class="grid">
+      <figure class="card wide"><figcaption>Aircraft in range</figcaption><div id="cAircraft"></div></figure>
+      <figure class="card"><figcaption>Busiest hours <span class="sub">average in range, last 7 days, your local time</span></figcaption><div id="cHours"></div></figure>
+      <figure class="card"><figcaption>Distinct aircraft a day <span class="sub">last 14 days</span></figcaption><div id="cDaily"></div></figure>
+      <div class="card"><h3>Top airlines <span class="sub">distinct aircraft, 7 days</span></h3><div id="tAirlines"></div></div>
+      <div class="card"><h3>Top aircraft types <span class="sub">distinct aircraft, 7 days</span></h3><div id="tTypes"></div></div>
+    </div>
+
+    <h2>Receivers</h2>
+    <div class="grid">
+      <div class="card wide"><h3>Last 24 hours by receiver</h3><div id="tReceivers"></div></div>
+      <figure class="card wide"><figcaption>Up or down <span class="sub">green is up the whole time, amber partly, red down</span></figcaption><div id="cUptime"></div></figure>
+      <figure class="card"><figcaption>Aircraft seen by each receiver</figcaption><div id="cRxAircraft"></div></figure>
+      <figure class="card"><figcaption>Farthest aircraft each receiver saw <span class="sub">nm, within your configured range</span></figcaption><div id="cRxRange"></div></figure>
+    </div>
+
+    <h2>Backend &amp; lookups</h2>
+    <div class="grid">
+      <figure class="card"><figcaption>Lookup cache hit rate <span class="sub">% of cached lookups that found something</span></figcaption><div id="cHit"></div></figure>
+      <figure class="card"><figcaption>Failed lookups <span class="sub">per sample, timeouts and errors</span></figcaption><div id="cFail"></div></figure>
+      <div class="card"><h3>Online lookups <span class="sub">last 24 hours</span></h3><div id="tLookups"></div></div>
+      <div class="card" id="aeroCard" hidden><h3>AeroAPI</h3><div id="tAero"></div></div>
+    </div>
+
+    <p id="foot"></p>
+  </main>
+  <div id="tip" role="status" hidden></div>
+  <script src="metrics.js"></script>
+</body>
+</html>

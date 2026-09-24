@@ -15,7 +15,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import aeroapi, config, filters, routes_db
+from . import aeroapi, config, filters, metrics, routes_db
 from .geo import bearing_deg, haversine_nm
 
 logging.basicConfig(level=logging.INFO)
@@ -387,11 +387,17 @@ async def _enrich_worker():
             for name, url, parse in (() if enough else _sources(kind, value)):
                 got = None
                 asked.append(name)
+                r = None
                 try:
                     r = await client.get(url, timeout=5)
+                    # a 404 is an answer ("never heard of it"); a 5xx, a 429 or
+                    # no reply at all is the source having a bad time
+                    metrics.lookup(name, r.status_code < 500 and r.status_code != 429)
                     if r.status_code == 200:
                         got = parse(r.json())
                 except Exception as e:
+                    if r is None:
+                        metrics.lookup(name, False)
                     log.debug("lookup failed for %s at %s: %s", key, url, e)
                 await asyncio.sleep(0.15)   # spaced out, and both are free services
                 if not got:
@@ -625,6 +631,8 @@ async def _poll_loop():
                                     if a["flight"] and not a["on_ground"]])
                 _state["updated"] = time.time()
                 _state["last_error"] = None
+                if config.METRICS:
+                    metrics.observe(out, sources, _enrich_cache, len(_queued))
             else:
                 _state["last_error"] = "; ".join(
                     f"{s['name']}: {s['error']}" for s in sources
@@ -666,9 +674,13 @@ async def lifespan(app: FastAPI):
         tasks.append(asyncio.create_task(_enrich_worker()))
     if aeroapi.enabled():
         tasks.append(asyncio.create_task(aeroapi.worker()))
+    if config.METRICS:
+        tasks.append(asyncio.create_task(metrics.worker()))
     yield
     for t in tasks:
         t.cancel()
+    if config.METRICS:
+        await metrics.flush_now()      # what was collected since the last write
 
 
 app = FastAPI(lifespan=lifespan)
@@ -747,6 +759,11 @@ async def get_aircraft(debug: int = 0):
         "debug": _debug_state() if debug else None,
         "aircraft": aircraft,
     }
+
+
+@app.get("/api/metrics")
+async def get_metrics(range: str = "24h"):
+    return await asyncio.to_thread(metrics.query, range)
 
 
 @app.middleware("http")

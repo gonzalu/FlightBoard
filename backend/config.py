@@ -144,6 +144,20 @@ AEROAPI_USAGE_FILE = _get(
     str(Path(__file__).resolve().parent.parent / "data" / "aeroapi-usage.json"),
 )
 
+# A history of what the board has seen, kept for the /metrics.html page. Samples
+# are held in memory and written every METRICS_FLUSH seconds rather than as they
+# arrive, so a Pi's SD card is not worn by a write a minute. Minute samples are
+# kept METRICS_RAW_DAYS days and rolled up to hourly ones, which are kept a year,
+# so the file stops growing, at roughly 30 MB for a busy site, however long it
+# runs.
+METRICS = _get("FLIGHTBOARD_METRICS", "1") == "1"
+METRICS_FILE = _get(
+    "FLIGHTBOARD_METRICS_FILE",
+    str(Path(__file__).resolve().parent.parent / "data" / "metrics.sqlite"),
+)
+METRICS_FLUSH = float(_get("FLIGHTBOARD_METRICS_FLUSH", "600"))
+METRICS_RAW_DAYS = int(_get("FLIGHTBOARD_METRICS_RAW_DAYS", "7"))
+
 # Show the diagnostic bands above and below the panel by default. Any display
 # can override it per URL with ?debug=1 or ?debug=0, which is usually what you
 # want: debug the board on a laptop while the cast TV stays clean.

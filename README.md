@@ -52,6 +52,7 @@ uses, and every dot you see is an individually addressed LED.
   * [Helicopters](#helicopters)
   * [The direction arrow](#the-direction-arrow)
   * [Which receiver saw it](#which-receiver-saw-it)
+  * [Metrics](#metrics)
   * [How it works](#how-it-works)
   * [Debug mode](#debug-mode)
   * [Troubleshooting](#troubleshooting)
@@ -1080,6 +1081,10 @@ you *hide* is separate, and lives in `filters.json` — see
 | `FLIGHTBOARD_AEROAPI_CALL_COST` | `0.005` | What one lookup is counted as costing. Check it against your plan. |
 | `FLIGHTBOARD_AEROAPI_NEAREST` | `5` | How many of the nearest aircraft are looked up. |
 | `FLIGHTBOARD_AEROAPI_TTL` | `1200` | Seconds an answer is reused before that flight is asked about again. |
+| `FLIGHTBOARD_METRICS` | `1` | Set `0` to stop recording the history behind `/metrics.html`. See [Metrics](#metrics). |
+| `FLIGHTBOARD_METRICS_FILE` | `data/metrics.sqlite` | Where that history is kept. |
+| `FLIGHTBOARD_METRICS_FLUSH` | `600` | Seconds between writes to disk. Long on purpose, for SD cards. |
+| `FLIGHTBOARD_METRICS_RAW_DAYS` | `7` | Days of minute-by-minute samples kept; hourly ones are kept a year. |
 | `FLIGHTBOARD_DEBUG` | `0` | `1` shows the diagnostic bands on every display. Any single display can override it with `?debug=1` or `?debug=0` — see [Debug mode](#debug-mode). |
 | `FLIGHTBOARD_PORT` | `8090` | Port. |
 
@@ -1179,6 +1184,69 @@ a 128×64 panel to put one — if you run that many receivers, open an issue and
 say what would actually help.
 
 Mini model only. The 160×32 `oss` layout has no bottom band to put them in.
+
+---
+
+## Metrics
+
+FlightBoard keeps a history of what it sees and how healthy its inputs are, and
+draws it at **`/metrics.html`** on the same address as the dashboard. It is on
+by default and needs nothing installed.
+
+- **Traffic.** Aircraft in range over time, the busiest hours of the day, how
+  many distinct aircraft flew over each day, and the airlines and aircraft types
+  seen most.
+- **Receivers.** For each one: how much of the time it was up, how many aircraft
+  it saw, and the farthest one. If you run several receivers this is where a Pi
+  that keeps dropping off Wi-Fi shows up, as a strip of green with gaps in it,
+  rather than as a hunch. The colours are the ones on the panel's receiver dots.
+- **Backend and lookups.** How often the lookup cache finds something, how often
+  adsbdb and hexdb time out or fail, and your [AeroAPI](#real-flight-times-optional)
+  spend against its cap if you have one.
+
+Pick 24 hours, 7 days, 30 days or a year at the top. Hover a chart for the value
+at that moment. The page works on a phone.
+
+### What it costs
+
+The history is one SQLite file, `data/metrics.sqlite`. It holds one sample a
+minute for the last 7 days, rolled up to one an hour for a year, plus one row per
+distinct aircraft per day (its address, airline code and type code) for a year.
+That is a fixed size: it stops growing once a year of hourly history has filled
+it. Measured with three busy receivers that is roughly 30 MB, and a quieter
+setup is well under that. Everything stays on your machine, and it is built from
+data your receivers already broadcast.
+
+**It is kind to SD cards.** Samples are held in memory and written every ten
+minutes, not every minute, so a Pi does not do a write a minute for the rest of
+its life. The price is that a power cut loses up to ten minutes of history, and
+the charts trail reality by up to ten minutes. A normal restart writes what it
+has first. If the disk fills or the file cannot be written, the backend logs it
+once, keeps the samples in memory and tries again; the board itself is never
+affected.
+
+| Variable | Default | What it does |
+|---|---|---|
+| `FLIGHTBOARD_METRICS` | `1` | Set `0` to record nothing and write no file. |
+| `FLIGHTBOARD_METRICS_FILE` | `data/metrics.sqlite` | Where the history lives. |
+| `FLIGHTBOARD_METRICS_FLUSH` | `600` | Seconds between writes to disk. |
+| `FLIGHTBOARD_METRICS_RAW_DAYS` | `7` | How long minute-by-minute samples are kept before only the hourly ones remain. |
+
+Deleting the file starts the history again from nothing.
+
+### Reading the numbers
+
+- **Distinct aircraft** counts each aircraft once per day, and only the ones your
+  [filters](#hiding-traffic-you-dont-want) let through. A day here is a UTC day,
+  so the boundary is not at your local midnight; every clock on the page is local.
+- **Farthest aircraft** is limited by how far out you have told the board to look
+  (`range_nm` in `filters.json`). It measures how far your receivers reach *up to
+  that distance*. To learn how far they really reach, raise it for a while.
+- **A failed lookup** is a timeout or a server error. A source answering "never
+  heard of that aircraft" is an answer, not a failure.
+- **The first ten minutes** after installing show nothing, and the page says so.
+- **Uptime** is measured from the backend's side, as whether it could read the
+  receiver's data at that moment, so it includes the network between them.
 
 ---
 

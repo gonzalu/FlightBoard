@@ -147,6 +147,19 @@ def stats():
     return out
 
 
+def airline_name(icao):
+    """An airline's name from its three-letter ICAO code, or None."""
+    db = _db()
+    if not db or not icao:
+        return None
+    try:
+        row = db.execute("SELECT name FROM airlines WHERE icao = ?",
+                         (icao.strip().upper(),)).fetchone()
+    except Exception:
+        return None
+    return (row[0] or None) if row else None
+
+
 def species(type_code):
     """ICAO species letter for a type designator: H helicopter, G gyrocopter,
     L landplane, A amphibian, S seaplane, T tiltwing. None if unknown.
