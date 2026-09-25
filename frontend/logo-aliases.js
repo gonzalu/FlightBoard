@@ -25,6 +25,11 @@ const LOGO_ALIASES = {
                 //                    XO (XOJ) are the same group but different
                 //                    brands with their own marks, so they are
                 //                    deliberately not aliased here.
+  FXC: 'LXJ',   // Flexjet Vertical Lift - Flexjet's Sikorsky S-76 helicopters
+                //                    (N76FX and its sisters) fly as FXC. The
+                //                    ICAO table gives FXC to Fortunair Canada,
+                //                    a cargo airline, whose banner drew as an
+                //                    unreadable smudge on a Flexjet helicopter.
   ENY: 'AAL',   // Envoy Air        - American Eagle only
   JIA: 'AAL',   // PSA Airlines     - American Eagle only
   PDT: 'AAL',   // Piedmont         - American Eagle only
