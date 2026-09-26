@@ -90,6 +90,12 @@ SOURCES = {
     # the fin, so the S, enclosed by it, survives.
     "SGX": "https://www.flyslate.com/wp-content/themes/slate/img/favicon/"
            "android-icon-192x192.png",
+    # Global X (Global Crossing Airlines). The archive holds nothing usable, so
+    # GXA drew as a tail fin. Their site's icon is the mark itself: a green and
+    # blue tail shape on a transparent field, two solid colours, which is what
+    # survives 28px best. globalxair.com is the real site; globalcrossingair.com
+    # is a parked domain and flyglobalx.com does not resolve.
+    "GXA": "https://globalxair.com/wp-content/uploads/2024/06/Favicon-transparent.webp",
 }
 
 # Art whose ink is itself white or pale, on a field that is already transparent.
