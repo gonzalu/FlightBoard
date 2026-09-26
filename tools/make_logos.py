@@ -149,7 +149,14 @@ ALLOW_SPARSE = {
 }
 
 PREFER_TAIL_FIN = {
-    # Empty. Tradewind left when its mark was redrawn by hand at 28x28 rather
+    # SCN is South American Airlines, a small cargo carrier. adsbdb also files
+    # it as the operator of a TWC Aviation Falcon 7X (N221HJ), a corporate jet
+    # that flies under its tail number, and the board trusts an operator code
+    # whenever it holds a logo for it - so a private jet drew a cargo airline's
+    # banner. Without an SCN mark it falls through to the owner name and then to
+    # the tail fin, which is honest. A real SCN flight loses its banner too.
+    "SCN",
+    # Otherwise empty. Tradewind left when its mark was redrawn by hand at 28x28 rather
     # than reduced to it; see the pass-through in build() below. Slate (SGX)
     # left when tools/fetch_logo_art.py found its favicon: the archive's line
     # art on white was noise, but their own tail-fin-and-S icon is not.

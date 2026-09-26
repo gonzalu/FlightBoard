@@ -19,6 +19,7 @@ metered, so this module is built around not spending money by accident.
 import asyncio
 import json
 import logging
+import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -145,16 +146,24 @@ def get(ident):
     return hit["data"] if hit else None
 
 
+# An airline flight is filed as a three-letter operator code and a number. A
+# tail number (N221HJ) is a private or charter aircraft with no schedule to
+# report, so a lookup for it is spent money that mostly comes back empty.
+_AIRLINE_CALLSIGN = re.compile(r"^[A-Z]{3}\d")
+
+
 def wanted(idents):
     """Ask for these flights if they are not already known or being fetched.
 
     Called with the aircraft nearest home only, so the money goes on flights
-    someone can actually see.
+    someone can actually see, and only airline callsigns are worth asking about.
     """
     if not enabled() or not _serving():
         return
     now = time.time()
     for ident in idents:
+        if not _AIRLINE_CALLSIGN.match(ident):
+            continue
         hit = _cache.get(ident)
         if hit and now - hit["ts"] < config.AEROAPI_TTL:
             continue

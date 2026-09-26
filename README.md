@@ -498,16 +498,21 @@ credit if you have one.
 ### How it keeps the bill small
 
 - **Only what someone can see.** Just the nearest five aircraft
-  (`FLIGHTBOARD_AEROAPI_NEAREST`) are ever looked up, and only airborne ones with
-  a callsign. Aircraft hidden by your filters cost nothing.
-- **Once per flight.** An answer is reused for 20 minutes
-  (`FLIGHTBOARD_AEROAPI_TTL`), however many times the board redraws it.
+  (`FLIGHTBOARD_AEROAPI_NEAREST`) are ever looked up, and only airborne ones
+  flying under an airline callsign such as `DAL79`. A private jet or helicopter
+  flying as its tail number has no schedule to report, so it costs nothing.
+  Aircraft hidden by your filters cost nothing either.
+- **Once per flight.** An answer is reused for an hour
+  (`FLIGHTBOARD_AEROAPI_TTL`), however many times the board redraws it. What it
+  holds is an arrival *time*, so the minutes shown keep counting down correctly
+  in between.
 - **A hard monthly cap.** Spend is counted by FlightBoard itself, in
   `data/aeroapi-usage.json`, so a restart does not reset it. When the next lookup
   would take you past the cap, lookups stop until the month rolls over. The
   count assumes each lookup costs `FLIGHTBOARD_AEROAPI_CALL_COST` (default
-  `0.005`); check that against your plan's price list and change it if it
-  differs, because the cap is only as accurate as that number.
+  `0.005`, which is what FlightAware charged when checked against a real
+  account's usage page); if your plan's price differs, change it, because the cap
+  is only as accurate as that number.
 - **Paced.** One lookup at a time, at least seven seconds apart, which stays
   inside the free tier's rate limit.
 
@@ -1080,7 +1085,7 @@ you *hide* is separate, and lives in `filters.json` — see
 | `FLIGHTBOARD_AEROAPI_MONTHLY_CAP` | `5` | Most you will spend on AeroAPI in a calendar month, in dollars. |
 | `FLIGHTBOARD_AEROAPI_CALL_COST` | `0.005` | What one lookup is counted as costing. Check it against your plan. |
 | `FLIGHTBOARD_AEROAPI_NEAREST` | `5` | How many of the nearest aircraft are looked up. |
-| `FLIGHTBOARD_AEROAPI_TTL` | `1200` | Seconds an answer is reused before that flight is asked about again. |
+| `FLIGHTBOARD_AEROAPI_TTL` | `3600` | Seconds an answer is reused before that flight is asked about again. |
 | `FLIGHTBOARD_METRICS` | `1` | Set `0` to stop recording the history behind `/metrics.html`. See [Metrics](#metrics). |
 | `FLIGHTBOARD_METRICS_FILE` | `data/metrics.sqlite` | Where that history is kept. |
 | `FLIGHTBOARD_METRICS_FLUSH` | `600` | Seconds between writes to disk. Long on purpose, for SD cards. |

@@ -131,14 +131,16 @@ ENRICH_FAIL_TTL = float(_get("FLIGHTBOARD_ENRICH_FAIL_TTL", "300"))
 # spend: feeders get a monthly credit, non-feeders on the free tier get less.
 AEROAPI_KEY = _get("FLIGHTBOARD_AEROAPI_KEY", "").strip()
 AEROAPI_MONTHLY_CAP = float(_get("FLIGHTBOARD_AEROAPI_MONTHLY_CAP", "5"))
-# What one lookup is counted as costing. Check it against your AeroAPI plan's
-# price list; it is a setting because FlightAware sets the price, not us.
+# What one lookup is counted as costing. FlightAware set 0.005 for a flight
+# lookup when this was checked against a real account's usage page (733 lookups,
+# $3.67). It is a setting because they set the price, not us.
 AEROAPI_CALL_COST = float(_get("FLIGHTBOARD_AEROAPI_CALL_COST", "0.005"))
 # How many of the nearest aircraft are looked up: the ones a display is showing.
 AEROAPI_NEAREST = int(_get("FLIGHTBOARD_AEROAPI_NEAREST", "5"))
-# How long a flight's answer is reused. Its estimated arrival drifts a little,
-# so this trades freshness against spend.
-AEROAPI_TTL = float(_get("FLIGHTBOARD_AEROAPI_TTL", "1200"))
+# How long a flight's answer is reused. The arrival it holds is a clock time, not
+# a countdown, so the minutes shown keep falling correctly between lookups; only
+# a change in the estimate itself is missed. An hour keeps the spend modest.
+AEROAPI_TTL = float(_get("FLIGHTBOARD_AEROAPI_TTL", "3600"))
 AEROAPI_USAGE_FILE = _get(
     "FLIGHTBOARD_AEROAPI_USAGE_FILE",
     str(Path(__file__).resolve().parent.parent / "data" / "aeroapi-usage.json"),
