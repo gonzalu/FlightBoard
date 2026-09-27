@@ -255,6 +255,12 @@ def needed(incoming):
     if LOGOS_JS.exists() and stale_logo_recipes():
         want("logos", "fetched artwork is out of date: "
                       + ", ".join(stale_logo_recipes()))
+    if LOGOS_JS.exists() and (CUSTOM_DIR / ".git").is_dir():
+        behind_custom = out(["git", "-C", CUSTOM_DIR, "fetch", "--quiet"])
+        if behind_custom is not None:
+            n = out(["git", "-C", CUSTOM_DIR, "rev-list", "--count", "HEAD..@{u}"])
+            if n and int(n) > 0:
+                want("logos", f"your private artwork repo is {n} commit(s) behind")
 
     if service_installed():
         started, changed = service_started(), newest_backend_change()
@@ -287,12 +293,34 @@ def step_deps():
     run([pip, "install", "-q", "-r", ROOT / "backend" / "requirements.txt"])
 
 
+CUSTOM_DIR = ROOT / "logo-sources" / "custom"
+
+
+def pull_custom_logos():
+    """logo-sources/custom is its own git clone of a private artwork repo (see
+    the README's "Carrying your own artwork between machines"), separate from
+    this checkout - the plain `git pull` above never touches it. Not every
+    install has one, so a missing directory or a plain non-git folder is fine
+    and quiet; only a git failure is worth a word, and even that does not stop
+    the rebuild - it runs with whatever is already on disk.
+    """
+    if not (CUSTOM_DIR / ".git").is_dir():
+        return
+    say("  pulling your private artwork repo (logo-sources/custom)...")
+    try:
+        run(["git", "-C", CUSTOM_DIR, "pull", "--ff-only"])
+    except subprocess.CalledProcessError as e:
+        say(f"  could not pull logo-sources/custom (exit {e.returncode}); "
+            "continuing with whatever is already there")
+
+
 def step_logos():
     try:
         import PIL  # noqa: F401
     except ImportError:
         raise SystemExit("The logo generator needs Pillow. Run this with the "
                          "system python3 (pip install pillow), not the .venv one.")
+    pull_custom_logos()
     run([sys.executable, TOOLS / "fetch_logo_art.py"])
 
     tmp = Path(tempfile.mkdtemp(prefix="logosrc-"))
@@ -441,6 +469,9 @@ def cmd_status(_args=None):
     steps = needed([])
     say(f"  logos      {logo_count(LOGOS_JS)} logos, {age(LOGOS_JS)}" if LOGOS_JS.exists()
         else "  logos      not built (optional)")
+    if (CUSTOM_DIR / ".git").is_dir():
+        n = out(["git", "-C", CUSTOM_DIR, "rev-list", "--count", "HEAD..@{u}"])
+        say(f"  custom art {'unknown (no upstream, or offline)' if n is None else f'{n} commit(s) behind' if int(n) else 'up to date'}")
     say(f"  database   {age(STANDING_DB)}" if STANDING_DB.exists()
         else "  database   not built (optional)")
     say(f"  map        {age(BASEMAP_JS)}" if BASEMAP_JS.exists()
