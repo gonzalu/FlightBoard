@@ -68,17 +68,28 @@ def say(msg=""):
     print(msg, flush=True)
 
 
+# Never let a git command block waiting for a username or password: a remote
+# needing auth (a private repo cloned over plain https, no credential helper -
+# see logo-sources/custom below) fails instantly instead of sitting at a
+# prompt. Without this, running the menu by hand at a real terminal (where
+# stdin is a tty) blocks silently; over SSH non-interactively it already
+# failed fast, which is what made this go unnoticed until it didn't.
+_GIT_ENV = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+
+
 def run(cmd, check=True, **kw):
     """Run a command with its output on the terminal, so a sudo prompt works."""
     say("  $ " + " ".join(str(c) for c in cmd))
-    return subprocess.run([str(c) for c in cmd], cwd=ROOT, check=check, **kw)
+    env = _GIT_ENV if cmd and cmd[0] == "git" else None
+    return subprocess.run([str(c) for c in cmd], cwd=ROOT, check=check, env=env, **kw)
 
 
 def out(cmd):
     """A command's stdout, or None if it could not run or failed."""
+    env = _GIT_ENV if cmd and cmd[0] == "git" else None
     try:
         r = subprocess.run([str(c) for c in cmd], cwd=ROOT, capture_output=True,
-                           text=True, timeout=60)
+                           text=True, timeout=60, env=env)
     except (OSError, subprocess.SubprocessError):
         return None
     return r.stdout.strip() if r.returncode == 0 else None
@@ -303,6 +314,10 @@ def pull_custom_logos():
     install has one, so a missing directory or a plain non-git folder is fine
     and quiet; only a git failure is worth a word, and even that does not stop
     the rebuild - it runs with whatever is already on disk.
+
+    A plain https clone with no saved credentials (no deploy key set up - see
+    the README) fails here every time, which is expected and harmless: it just
+    means new art you push has to be fetched by hand until the key is added.
     """
     if not (CUSTOM_DIR / ".git").is_dir():
         return
