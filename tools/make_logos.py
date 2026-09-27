@@ -23,6 +23,7 @@ default output path is gitignored for that reason.
 import argparse
 import json
 import os
+import re
 import sys
 
 from PIL import Image, ImageEnhance
@@ -427,7 +428,23 @@ def main():
             stem, ext = os.path.splitext(name)
             if ext.lower() not in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
                 continue
-            candidates.setdefault(stem.upper(), []).append(os.path.join(directory, name))
+            code = stem.upper()
+            # The stem becomes a bare JavaScript object key in the output, with
+            # no quoting - see the write-out below. A file named for a person
+            # rather than a carrier (CMP-black-option.png, a kept-but-unused
+            # alternative) produced a key with a hyphen in it, which is invalid
+            # JS syntax: the *entire* generated file failed to parse in the
+            # browser, and every carrier lost its logo at once - not just the
+            # one bad file. ICAO/IATA codes are 2-4 letters or digits, so
+            # anything else is skipped here, before it can do that again.
+            if not re.fullmatch(r"[A-Z0-9]{2,4}", code):
+                print(f"note: {os.path.join(directory, name)} is not named like a "
+                      f"carrier code (<2-4 letters/digits>.ext) - skipped, so it "
+                      f"cannot corrupt the output. Keep a file you are not using "
+                      f"yet outside this directory, e.g. in a subfolder.",
+                      file=sys.stderr)
+                continue
+            candidates.setdefault(code, []).append(os.path.join(directory, name))
 
     for code, wanted in PREFER_SOURCE.items():                 # promote, don't copy
         paths = candidates.get(code)
